@@ -1,61 +1,61 @@
-# 小鲸鱼 · Whale Companion
+# Whale Companion
 
 **Your little whale buddy for work, wins, and well-earned naps.**
 
-![小鲸鱼的六种状态：工作、等待、庆祝、错误、休息与睡眠](docs/images/whale-states.png)
+![Six whale states: working, waiting, celebrating, error, resting, and sleeping](docs/images/whale-states.png)
 
-*角色状态示意图，非真实会话触发的验证截图。鲸鱼贴纸为 DeepSeek 原创素材。*
+*Character state overview. Whale stickers are original artwork by DeepSeek.*
+
+A little companion that lives inside your DeepSeek Harness (DSH) window—there while you work, wait, and rest.
 
 一只住在 DSH 窗口里的小鲸鱼。陪你工作、等你决定，也陪你好好打个盹。
 
-> **实验性版本：0.2.8-beta.1。** 兼容目标为 DSH Desktop 0.1.6-alpha.2。本版本用于公开源码与测试，不是稳定性认证：实际安装环境中，正常完成后的庆祝存在未触发报告，尚未定位。单元测试及离线演示通过不代表现场问题已修复。
->
-> Experimental personal project. Target: DSH Desktop 0.1.6-alpha.2. Celebration may not appear in the installed app; this known issue is not fixed in this public beta.
+> **Experimental release: 0.2.8-beta.1.** Compatibility target: DSH Desktop 0.1.6-alpha.2. Celebration may not appear after a completed reply in the installed app; this known issue is not fixed in this public beta. Passing isolated tests does not establish that the issue is resolved.
 
-## 能做什么
+## Features
 
-- 在 DSH 窗口内拖动、缩放、隐藏和唤回；不额外启动桌面常驻程序。
-- “全局会话 / 当前会话”两种范围，工作时显示普通主会话的工作数量。
-- 六种角色姿态：休息、工作、等待、庆祝、睡觉、错误。
-- 中英文文案、深浅色设置菜单及减少动态效果选项。
-- 正常完成与取消、失败分开处理；不会仅凭工作数下降或小绿点判断成功。
+- Drag, resize, hide, and restore your whale inside the DSH window.
+- Choose **All sessions** or **Current session**, with a working-session count for ordinary main sessions.
+- Six character states: resting, working, waiting, celebrating, sleeping, and error.
+- English and Chinese text, light and dark settings menus, and reduced-motion support.
+- Separate normal completion from cancellation and failure; a falling working count or green unread indicator alone does not mean success.
 
-这是窗口内插件，不是覆盖操作系统桌面的独立悬浮窗。
+This is an in-window plugin, not a separate operating-system desktop overlay.
 
-## 安装测试版
+## Install the beta
 
-在 DSH 插件管理的安装入口输入固定版本标识：
+Enter this pinned version spec in DSH's plugin installation interface:
 
 ```text
 github:Yifffan/dsh-plugin-whale-pet#v0.2.8-beta.1
 ```
 
-这是 Git 标签对应的源码快照，包含预构建插件文件。无需先发布到 npm，也不需要用户自行编译。未来打包的安装文件将单独作为 [Releases](https://github.com/Yifffan/dsh-plugin-whale-pet/releases) 附件提供；GitHub 自动生成的“Source code”压缩包不要当作插件 tgz。
+The tagged source snapshot includes prebuilt plugin files; users do not need to build it themselves. Packaged downloads may be published separately as [Release assets](https://github.com/Yifffan/dsh-plugin-whale-pet/releases). GitHub's automatically generated “Source code” archives are not plugin tgz packages.
 
-**从 0.2.6 或更早版本升级时，先阅读 [升级说明](UPGRADE.md)。** 旧条目ID的启停配置不会自动迁移。不要在有任务运行时更换插件或重启 DSH。本项目不会自动修改你的 profile。
+**Upgrading from 0.2.6 or earlier? Read the [upgrade notes](UPGRADE.md) first.** Overrides for the old entry ID do not migrate automatically. Do not replace the plugin or restart DSH while tasks are running. This plugin never automatically edits your profile.
 
-安装/启用后，若需要重新加载宿主模块，等当前任务结束再完整退出并重新打开 DSH；仅关闭窗口不一定退出进程。重启不是庆祝已知问题的保证解决方案。
+If host modules need reloading after installation or activation, wait for current tasks to finish, fully quit DSH, and reopen it. Closing a window may not quit the application. Restarting is not a guaranteed fix for the known celebration issue.
 
-## 使用
+## Usage
 
-- 点击鲸鱼：打招呼；拖动：调整位置。
-- 右键鲸鱼：切换会话范围、大小、动画和入睡时间。
-- 收起后：通过恢复按钮唤回。
-- 全局模式只表示当前连接 Host 中的普通主会话，不表示跨设备、跨 Host 汇总。
-- 等待用户确认具有较高优先级；短暂完成提示不会排队补播。
+- **Click** the whale to say hello; **drag** it to reposition.
+- **Right-click** to change session scope, size, animation, and nap timing.
+- Use the restore button to bring back a hidden whale.
+- Global scope covers ordinary main sessions on the currently connected Host—not multiple devices or Hosts.
+- Waiting for user input has higher display priority. Brief completion notices are not queued for later replay.
 
-## 已知问题与验证边界
+## Known issues and verification limits
 
-1. **安装后的庆祝可能不出现。** 当前会话与全局模式共用完成事件流；两种范围都有未触发报告。尚不能确认故障位于连接、事件过滤还是状态优先级。
-2. **条目ID历史变更。** 0.2.7起采用`whale-pet`，模块名仍为`dsh-plugin-whale-pet`。旧覆盖配置要单独迁移。
-3. DSH仍处于alpha阶段，插件接口可能变化。未认证其他DSH版本及操作系统组合。
-4. 离线预览可以主动模拟完成，这只验证渲染与状态机，不是来自真实会话的完成证明。
+1. **Celebration may not appear in the installed app.** Current-session and global modes share the completion stream, and both have reports of missed celebrations. The cause has not been isolated to connection, event filtering, or display priority.
+2. **Historical entry-ID change.** Since 0.2.7, the entry ID is `whale-pet`; the module name remains `dsh-plugin-whale-pet`. Older overrides require migration.
+3. DSH is still in alpha, and plugin interfaces may change. Other DSH versions and operating-system combinations are not certified.
+4. The offline preview deliberately simulates completion. It validates rendering and state transitions, not delivery of real session events.
 
-详情见 [兼容与验证边界](COMPATIBILITY.md)。报告问题请使用 [Issues](https://github.com/Yifffan/dsh-plugin-whale-pet/issues)，提供DSH/插件版本、会话范围、操作步骤；请移除聊天正文、会话标识和其他敏感信息。
+See [compatibility and verification boundaries](COMPATIBILITY.md). When [reporting an issue](https://github.com/Yifffan/dsh-plugin-whale-pet/issues), include DSH/plugin versions, session scope, and reproduction steps. Remove chat content, session identifiers, and other sensitive information.
 
-## 开发与本地预览
+## Development and local preview
 
-需要 Node.js 22或更新版本，以及项目清单中锁定版本的pnpm。
+Use Node.js 22 or newer and the pnpm version pinned in the project manifest.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -63,41 +63,41 @@ pnpm run build
 pnpm test
 ```
 
-构建会重建桥接契约与客户端，并生成离线预览。生成后可直接用浏览器打开下面的本地文件，无需启动Web服务器：
+The build regenerates the bridge contract and client, then creates an offline preview. Open this generated local file in a browser; no web server is needed:
 
 ```text
 preview/index.html
 ```
 
-预览不连接DSH，不调用模型；其通用箭头是独立绘制的占位图标，生产界面仍调用DSH公共图标。
+The preview does not connect to DSH or call a model. Its generic chevron is independently drawn; the production interface uses DSH's public icon component.
 
 ```sh
-# 构建和测试成功后，生成本地插件包：
+# After a successful build and test run, create a local plugin package:
 pnpm pack --pack-destination artifacts
 ```
 
-安装时没有自动构建、自动迁移配置或下载运行库的生命周期脚本。构建和测试是显式开发步骤。仓库保留预构建的`lib`文件以支持Git安装；修改源码后须重新构建，提交一致的产物。
+The package declares no installation lifecycle hooks to build code, migrate profiles, or download a runtime. Building and testing are explicit development steps. Prebuilt files are committed for Git installation; rebuild after source changes and commit matching outputs.
 
-字体已随项目提供，正常构建不下载字体。新增中文气泡文案时要重新检查字形覆盖；首个公开快照不包含字体再子集工具，见 [字体来源与许可](FONT-LICENSES.md)。
+Fonts are bundled, so ordinary builds do not download them. New Chinese bubble text requires a glyph-coverage check; the first public snapshot does not include font-resubsetting tools. See [font sources and licenses](FONT-LICENSES.md).
 
-## 隐私与运行边界
+## Privacy and runtime boundaries
 
-- 不修改DSH本体，不发送模型消息，不增加模型推理调用，也不代替你处理审批。
-- 使用DSH已有认证连接，不额外监听网络端口，没有遥测或运行时字体/CDN请求。
-- 完成桥接仅投影必要的会话身份及回合边界信息，不传输聊天正文。
-- 设置保存在客户端本地；开发测试使用合成数据。仓库不包含用户profile、会话记录或DSH提取源码。
+- Does not modify DSH itself, send model messages, add model inference calls, or act on approvals for you.
+- Uses DSH's existing authenticated connection. No additional listening port, telemetry, or runtime font/CDN requests.
+- The completion bridge projects only necessary session identity and turn-boundary metadata—not chat content.
+- Preferences stay in client-local storage. Tests use synthetic data. This repository contains no user profiles, session records, or extracted DSH implementation code.
 
-## 素材与项目说明
+## Artwork and project notice
 
-本插件使用的鲸鱼贴纸为 DeepSeek 原创素材，相关权利归 DeepSeek 或其相应权利人所有，不属于本项目的 MIT 代码许可范围。
+The whale stickers used by this plugin are original artwork by DeepSeek. All related rights belong to DeepSeek or the respective rights holders. The artwork is not covered by this project's MIT code license.
 
-本项目为个人开发项目，并非 DeepSeek 官方产品，不代表 DeepSeek 的官方立场或背书。
+This is a personal project, not an official DeepSeek product. It does not represent DeepSeek's official views or endorsement.
 
-本项目已获许可，在本仓库及其发布的插件安装包中使用和分发上述素材。该许可不自动延伸至第三方的提取、修改或再次分发。
+This project has permission to use and distribute the artwork in this repository and its published plugin packages. That permission does not automatically extend to third parties extracting, modifying, or redistributing the artwork.
 
-- 代码：[MIT License](LICENSE)。
-- 鲸鱼插画：[素材授权说明](ASSETS-LICENSE.md)，不随代码授予MIT许可。
-- 字体：[SIL OFL 1.1及来源说明](FONT-LICENSES.md)。
-- 桥接契约包含Zod，其MIT版权和许可声明保留在生成文件中。
+- **Code:** [MIT License](LICENSE).
+- **Whale artwork:** [artwork permission notice](ASSETS-LICENSE.md), separate from the MIT code license.
+- **Fonts:** [SIL OFL 1.1 and source notices](FONT-LICENSES.md).
+- **Zod:** its MIT copyright and license notice are preserved in the generated bridge files.
 
-请勿将“代码可复用”理解为可以自由提取或重新分发鲸鱼插画。
+Permission to reuse the code is not permission to freely extract or redistribute the whale artwork.
