@@ -23,4 +23,14 @@ export const WHALE_WATCH_DESCRIPTOR = {
   cancellation: { parameter: 'signal' },
   result: { mode: 'strict', typeSymbol: 'dsh-plugin-whale-pet#WhaleBoundaryFrame', create: () => WHALE_FRAME_SCHEMA },
 };
-export const TYPERT_REMOTE = { package: 'dsh-plugin-whale-pet', descriptors: [WHALE_WATCH_DESCRIPTOR] };
+// Unary Remote methods OMIT mode (any mode selects a stream in DSH).
+// No input payload, history, epoch, identifiers, or raw failure strings.
+export const WHALE_DIAGNOSTICS_SCHEMA = z.strictObject({
+  version: z.string().check(z.maxLength(32)), starts: counter, ends: counter, completed: counter,
+});
+export const WHALE_DIAGNOSTICS_DESCRIPTOR = {
+  id: 'dsh-plugin-whale-pet#whalePet/diagnostics', service: 'whalePet', namespace: 'whalePet', method: 'diagnostics',
+  invocation: { kind: 'direct' }, parameters: [], cancellation: { parameter: 'signal' },
+  result: { mode: 'strict', typeSymbol: 'dsh-plugin-whale-pet#WhaleDiagnosticsSnapshot', create: () => WHALE_DIAGNOSTICS_SCHEMA },
+};
+export const TYPERT_REMOTE = { package: 'dsh-plugin-whale-pet', descriptors: [WHALE_WATCH_DESCRIPTOR, WHALE_DIAGNOSTICS_DESCRIPTOR] };

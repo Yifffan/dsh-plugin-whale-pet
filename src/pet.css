@@ -7,7 +7,7 @@
 --control-fill:light-dark(color-mix(in srgb,var(--control) 97%,var(--ink) 3%),color-mix(in srgb,var(--control) 90%,var(--ink) 10%));--control-hover:light-dark(color-mix(in srgb,var(--control) 95%,var(--ink) 5%),color-mix(in srgb,var(--control) 88%,var(--ink) 12%));--control-active:light-dark(color-mix(in srgb,var(--control) 93%,var(--ink) 7%),color-mix(in srgb,var(--control) 86%,var(--ink) 14%));--control-line:var(--dsw-alias-border-l2,light-dark(#0000001a,#ffffff1f));
 --menu-blur:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));
 --bubble-bg:light-dark(#f0f4ff,#ffffff);--bubble-ink:#394565;--bubble-line:light-dark(#dbe2ef,transparent);--bubble-shadow:light-dark(#52658d20,#0000002b)}
-*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:4px}[hidden]{display:none!important}
+*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:4px}[hidden]{display:none!important}
 .pet{position:fixed;width:156px;height:156px;pointer-events:none;isolation:isolate;user-select:none;-webkit-user-select:none;transform-origin:50% 100%}
 .pet-button{all:unset;box-sizing:border-box;display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%;padding:20px 9px 17px;cursor:grab;touch-action:none;pointer-events:auto;-webkit-app-region:no-drag;border-radius:28px;position:relative}
 .pet-button:active{cursor:grabbing}.pet-button:focus-visible{outline:2px dashed var(--accent);outline-offset:0}
@@ -39,7 +39,7 @@
 .sparkles{position:absolute;inset:0;pointer-events:none;display:none}.pet[data-state=celebrate] .sparkles{display:block}.sparkles span{position:absolute;color:#dca44f;font-size:18px;animation:whale-sparkle 1s ease-in-out infinite}.sparkles span:nth-child(1){left:5%;top:22%}.sparkles span:nth-child(2){right:6%;top:6%;animation-delay:.2s;font-size:13px}.sparkles span:nth-child(3){right:0;top:50%;animation-delay:.4s;font-size:11px}@keyframes whale-sparkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}
 /* Restore DSH's global corner treatment inside this shadow root, only on UI surfaces.
    Circular switches/dots/thumbs and the explicit SVG bubble geometry stay untouched. */
-.panel,.restore,.panel button,.setting select,.setting option{corner-shape:var(--dsw-corner-shape,superellipse(1.5))}
+.panel,.restore,.panel button,.setting select,.setting option,.diagnostics-text{corner-shape:var(--dsw-corner-shape,superellipse(1.5))}
 .setting select::picker(select){corner-shape:var(--dsw-corner-shape,superellipse(1.5))}
 /* Official menu elevation, resolved locally: body * rules cannot enter a shadow root. */
 .panel,.restore{background:var(--surface);backdrop-filter:var(--menu-blur);box-shadow:0 0 0 .5px var(--hairline),0 3px 8px #0000000a,0 0 20px #0000000d}
@@ -76,7 +76,18 @@
 .setting input[type=checkbox]{appearance:none;position:relative;flex:none;width:36px;height:20px;margin:0;border:0;border-radius:99px;background:var(--border);cursor:pointer;transition:background .15s}
 .setting input[type=checkbox]::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--foreground);transition:transform .15s}
 .setting input[type=checkbox]:checked{background:var(--accent)}.setting input[type=checkbox]:checked::before{transform:translateX(16px)}
-.panel button:focus-visible,.panel input:focus-visible,.panel select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel button:focus-visible,.panel input:focus-visible,.panel select:focus-visible,.panel textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Diagnostics remain a system-font menu surface, never a speech bubble. */
+.diagnostics-toggle{display:block;width:100%;margin-top:8px;text-align:left}
+.diagnostics-toggle[aria-expanded=true]{background:var(--tint)}
+.diagnostics{margin-top:12px;padding-top:12px;border-top:.5px solid var(--divider);font-family:var(--dsw-font-family,system-ui,sans-serif)}
+.diagnostics h2{margin:0 0 6px;font-size:13px;line-height:20px;font-weight:600}
+.diagnostics-notice,.diagnostics-status{margin:0 0 8px;color:var(--muted);font-size:12px;line-height:18px;overflow-wrap:anywhere}
+.diagnostics-text{display:block;width:100%;height:160px;max-height:32vh;min-height:64px;resize:none;overflow:auto;overscroll-behavior:contain;white-space:pre;user-select:text;-webkit-user-select:text;border:.5px solid var(--border);border-radius:10px;padding:8px;background:var(--control);color:var(--ink);font-family:inherit;font-size:11px;line-height:17px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.diagnostics-actions{display:flex;gap:8px;margin-top:8px}
+.diagnostics-status{margin:8px 0 0;min-height:36px}
+.diagnostics-actions button:disabled{opacity:.55;cursor:wait}
+.panel{overscroll-behavior:contain}
 .panel-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:.5px solid var(--divider)}
 .action{flex:1;min-width:0;min-height:32px;border:1px solid var(--border);background:transparent;color:var(--ink);border-radius:8px;padding:5px 8px;font-size:12px;line-height:20px}.action:hover{background:var(--tint)}.action:active,.close:active{background:var(--active)}
 .restore{position:fixed;right:18px;bottom:18px;pointer-events:auto;border:0;color:var(--muted);border-radius:99px;padding:7px 11px;font-size:11px;-webkit-app-region:no-drag}.restore:hover{color:var(--ink);background:var(--control)}

@@ -18,7 +18,9 @@ test('package is a self-contained DSH bundle with only its own inserted row', ()
   for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack', 'postpack']) {
     assert.equal(manifest.scripts[hook], undefined);
   }
-  assert.equal(manifest.version, '0.2.8-beta.1');
+  assert.equal(manifest.version, '0.2.8-beta.2');
+  assert.ok(read('src/version.js').includes(`WHALE_VERSION = '${manifest.version}'`));
+  assert.equal(read('lib/version.js'), read('src/version.js'));
   assert.deepEqual(manifest.repository, { type: 'git', url: 'git+https://github.com/Yifffan/dsh-plugin-whale-pet.git' });
   assert.equal(manifest.homepage, 'https://github.com/Yifffan/dsh-plugin-whale-pet');
   assert.equal(manifest.bugs.url, `${manifest.homepage}/issues`);

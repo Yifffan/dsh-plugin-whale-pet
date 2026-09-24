@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WhaleBoundaryHub, runtimeIdentity } from '../src/host-bridge.js';
 import { observeGlobalEvents } from '../src/bridge-client.js';
+import { WhaleDiagnostics } from '../src/diagnostics.js';
 import { WHALE_FRAME_SCHEMA, TYPERT_REMOTE } from '../lib/remote.js';
 import { TYPERT } from '../lib/typert.host.js';
 const event = (seq,type='turn/end',kind='completed') => ({ seq,type,time:seq,data:{reason:{kind,message:'PRIVATE'},content:'PRIVATE'} });
@@ -125,4 +126,102 @@ test('invalid/gapped frames fail closed and clear unplayed notifications',async(
 test('absence of Remote is a completion-stream failure, not a fabricated task state',()=>{
  const flags=[],resets=[];const cleanup=observeGlobalEvents({}, {onHealth:v=>flags.push(v),onReset:v=>resets.push(v)});
  assert.deepEqual(flags,[false]);assert.equal(resets[0].reason,'unavailable');cleanup();cleanup();
+});
+
+const flush = async () => { for (let i=0;i<80;i++) await Promise.resolve(); };
+test('failed LOCAL mount retries in same observer and overlapping retries coalesce',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  let mounts=0,unmounts=0;
+  ctx.remote.$mount=async()=>{if(++mounts===1)throw Error('PRIVATE');return async()=>{unmounts++}};
+  const a=observeGlobalEvents(ctx,{diagnostics}),b=observeGlobalEvents(ctx);
+  t.after(()=>{a();b();hub.dispose()});await flush();
+  assert.equal(mounts,1);assert.equal(hub.clients.size,0);
+  t.mock.timers.tick(1000);await flush();
+  assert.equal(mounts,2);assert.equal(hub.clients.size,2);
+  assert.equal(diagnostics.snapshot().counts.mountAttempts,2);assert.equal(diagnostics.snapshot().counts.mountFailures,1);
+  a();await flush();assert.equal(unmounts,0);
+  b();await flush();assert.equal(unmounts,1);
+});
+
+test('reconnect reacquires failed local lease without waiting for scheduled retry',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);let mounts=0;
+  ctx.remote.$mount=async()=>{if(++mounts===1)throw Error('PRIVATE');return async()=>{}};
+  const stop=observeGlobalEvents(ctx);t.after(()=>{stop();hub.dispose()});await flush();
+  ctx.connection.state.set('disconnected');ctx.connection.generation.set(2);ctx.connection.state.set('connected');await flush();
+  assert.equal(mounts,2);assert.equal(hub.clients.size,1);
+  t.mock.timers.tick(10000);await flush();assert.equal(mounts,2);assert.equal(hub.clients.size,1);
+});
+
+test('ordinary watch dispatch failure retries watch but never remounts',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();let watches=0;
+  ctx.remote.whalePet.watch=signal=>{if(++watches===1)throw Error('PRIVATE');return hub.watch(signal)};
+  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
+  t.mock.timers.tick(1000);await flush();
+  assert.equal(watches,2);assert.equal(ctx.counts().mounts,1);
+  assert.equal(diagnostics.snapshot().counts.watchFailures,1);assert.equal(diagnostics.snapshot().counts.mountFailures,0);
+});
+
+test('new mount waits for prior namespace unmount to finish',async t=>{
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);let mounts=0,active=0,finish;
+  ctx.remote.$mount=async()=>{assert.equal(active,0);active++;mounts++;return()=>new Promise(resolve=>{finish=()=>{active--;resolve()}})};
+  const a=observeGlobalEvents(ctx);await flush();a();await flush();assert.equal(typeof finish,'function');
+  const b=observeGlobalEvents(ctx);t.after(()=>{b();hub.dispose()});await flush();assert.equal(mounts,1);
+  finish();await flush();assert.equal(mounts,2);assert.equal(hub.clients.size,1);
+  b();await flush();finish();await flush();assert.equal(active,0);
+});
+
+test('repeated zero-ref transitions during pending mount unmount once and serialize replacement',async t=>{
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);
+  let finishMount,finishUnmount,mounts=0,unmounts=0,active=0;
+  ctx.remote.$mount=()=>{mounts++;assert.equal(active,0);return new Promise(resolve=>{finishMount=()=>{active++;resolve(()=>{unmounts++;return new Promise(done=>{finishUnmount=()=>{active--;done()}})})}})};
+  const a=observeGlobalEvents(ctx);await flush();a();
+  const b=observeGlobalEvents(ctx);b();await flush();assert.equal(mounts,1);
+  finishMount();await flush();assert.equal(unmounts,1);
+  const c=observeGlobalEvents(ctx);t.after(()=>{c();hub.dispose()});await flush();assert.equal(mounts,1);
+  finishUnmount();await flush();assert.equal(mounts,2);finishMount();await flush();assert.equal(hub.clients.size,1);
+  c();await flush();assert.equal(unmounts,2);finishUnmount();await flush();assert.equal(active,0);
+});
+
+test('reconnect while initial local mount is pending starts only newest stream generation',async t=>{
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);let finish,mounts=0;
+  ctx.remote.$mount=()=>{mounts++;return new Promise(resolve=>{finish=()=>resolve(async()=>{})})};
+  const stop=observeGlobalEvents(ctx);t.after(()=>{stop();hub.dispose()});await flush();
+  ctx.connection.state.set('disconnected');ctx.connection.generation.set(2);ctx.connection.state.set('connected');
+  finish();await flush();assert.equal(mounts,1);assert.equal(hub.clients.size,1);
+});
+
+test('disposing after failed mount cancels recovery; reconnect cannot resurrect observer',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);let mounts=0;
+  ctx.remote.$mount=async()=>{mounts++;throw Error('PRIVATE')};
+  const stop=observeGlobalEvents(ctx);await flush();stop();
+  ctx.connection.state.set('disconnected');ctx.connection.state.set('connected');t.mock.timers.tick(10000);await flush();
+  assert.equal(mounts,1);assert.equal(hub.clients.size,0);hub.dispose();
+});
+
+test('baseline-only feed ready never fabricates a received boundary',async t=>{
+  const hub=new WhaleBoundaryHub({epoch:'PRIVATE'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
+  const snapshot=diagnostics.snapshot();assert.equal(snapshot.ready,true);assert.equal(snapshot.counts.baselines,1);
+  assert.equal(snapshot.counts.starts,0);assert.equal(snapshot.counts.ends,0);assert.equal(snapshot.counts.completed,0);
+  assert.equal(diagnostics.text().includes('PRIVATE'),false);
+  ctx.connection.state.set('disconnected');assert.equal(diagnostics.snapshot().ready,false);
+});
+
+test('parser, order and duplicate frame categories remain distinct',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  for(const [kind,frame]of [
+    ['parserFailures',{type:'turn/end',body:'PRIVATE'}],
+    ['orderFailures',{type:'turn/end',hostEpoch:'e',streamSeq:3,sessionId:'PRIVATE',seq:1,time:1,reason:'completed'}],
+    ['duplicates',{type:'turn/end',hostEpoch:'e',streamSeq:0,sessionId:'PRIVATE',seq:1,time:1,reason:'completed'}],
+  ]){
+    const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+    const stop=observeGlobalEvents(ctx,{diagnostics});await flush();for(const client of hub.clients)client.push(frame);await flush();
+    const s=diagnostics.snapshot();assert.equal(s.counts[kind],1);assert.equal(s.counts.ends,0);assert.equal(s.counts.watchFailures,0);
+    assert.equal(s.counts.receivedEnds,kind==='parserFailures'?0:1);assert.equal(s.counts.receivedCompleted,kind==='parserFailures'?0:1);
+    assert.equal(diagnostics.text().includes('PRIVATE'),false);stop();hub.dispose();await flush();
+  }
 });

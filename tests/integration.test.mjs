@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { connectWhaleState } from '../src/adapter.js';
 import { PetStateMachine } from '../src/state.js';
+import { WhaleDiagnostics } from '../src/diagnostics.js';
+import { WHALE_VERSION } from '../src/version.js';
 function wire() {
   let connection = 'connected', handlers, disposed = 0;
   const listeners = new Set();
@@ -74,4 +76,46 @@ test('teardown removes both subscriptions once and ignores late callbacks', () =
   const f = wire(); f.control.dispose(); f.control.dispose(); const length = f.updates.length;
   f.handlers.onReset(); f.handlers.onHealth(true); f.boundary('a', 2, 'turn/end', 'completed'); f.control.publish();
   assert.equal(f.updates.length, length); assert.equal(f.disposed, 1); assert.equal(f.listeners.size, 0);
+});
+
+const flush = async () => { for(let i=0;i<100;i++)await Promise.resolve(); };
+test('user diagnostics refresh is on-demand, coalesced, aborted and cleaned up on disposal',async()=>{
+  const f=wire();let calls=0,signal,resolve;
+  f.ctx.remote={whalePet:{diagnostics(s){calls++;signal=s;return new Promise(r=>{resolve=r})}}};
+  assert(f.widget.diagnostics instanceof WhaleDiagnostics);assert.equal(f.handlers.diagnostics,f.widget.diagnostics);
+  assert.equal(calls,0);const refresh=f.widget.onDiagnosticsRefresh;
+  const a=refresh(),b=refresh();await flush();assert.equal(calls,1);
+  resolve({ok:true,value:{version:WHALE_VERSION,starts:3,ends:2,completed:1}});await Promise.all([a,b]);
+  assert.equal(f.widget.diagnostics.snapshot().host.completed,1);
+  const pending=refresh();await flush();assert.equal(calls,2);f.control.dispose();await pending;
+  assert(signal.aborted);assert.equal(f.widget.onDiagnosticsRefresh,undefined);
+  resolve({ok:true,value:{version:WHALE_VERSION,starts:99,ends:99,completed:99}});await flush();
+  assert.equal(f.widget.diagnostics.snapshot().host.status,'unavailable');await refresh();assert.equal(calls,2);
+});
+
+test('adapter reuses widget collector and disconnect cancels outstanding host snapshot',async()=>{
+  const d=new WhaleDiagnostics(),listeners=new Set();let connected=true,signal;
+  const ctx={connection:{state:{getSnapshot:()=>connected?'connected':'disconnected',subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn)}}},remote:{whalePet:{diagnostics(s){signal=s;return new Promise(()=>{})}}}};
+  const widget={diagnostics:d,preferences:{scope:'global'},update(){}};
+  const control=connectWhaleState(ctx,widget,()=>({catalog:{phase:'ready',byId:{}},statuses:new Map()}),()=>()=>{});
+  assert.equal(widget.diagnostics,d);const pending=widget.onDiagnosticsRefresh();await flush();
+  connected=false;for(const fn of listeners)fn();await pending;assert(signal.aborted);assert.equal(d.snapshot().host.status,'unavailable');control.dispose();
+});
+
+test('clean EOF clears just-published notice while preserving diagnostic transition trace',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const d=new WhaleDiagnostics(),machine=new PetStateMachine(0),poses=[];
+  const widget={diagnostics:d,preferences:{scope:'global'},host:{dataset:{}},update(s){const view=machine.update(s,0);poses.push(view.state);d.setView(view,{scope:'global'})}};
+  const state={getSnapshot:()=> 'connected',subscribe:()=>()=>{}};
+  const frame=(type,seq)=>({type,hostEpoch:'PRIVATE',streamSeq:seq,sessionId:'PRIVATE',seq,time:seq,...(type==='turn/end'?{reason:'completed'}:{})});
+  const ctx={root:{},connection:{state},remote:{$mount:async()=>async()=>{},whalePet:{async *watch(){
+    yield {type:'baseline',hostEpoch:'PRIVATE',streamSeq:0,identities:[]};yield frame('turn/start',1);yield frame('turn/end',2);
+  }}}};
+  const control=connectWhaleState(ctx,widget,()=>({catalog:{phase:'ready',byId:{PRIVATE:{running:false}}},statuses:new Map([['PRIVATE',{running:false}]])}));
+  t.after(()=>control.dispose());await flush();
+  assert(poses.includes('celebrate'));assert.equal(poses.at(-1),'resting');
+  const snapshot=d.snapshot();assert.equal(snapshot.counts.cleanEof,1);assert.equal(snapshot.counts.completed,1);assert.equal(snapshot.ready,false);
+  assert(snapshot.trace.some(x=>x.event==='view'&&x.pose==='celebrate'));
+  assert(snapshot.trace.some(x=>x.event==='reset'&&x.reason==='stream-ended'));
+  assert.equal(snapshot.aggregate.notice,'none');assert(!d.text().includes('PRIVATE'));
 });

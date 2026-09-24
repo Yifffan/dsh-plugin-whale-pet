@@ -19,5 +19,6 @@ await build({
   minify: false, legalComments: 'inline',
   banner: { js: '// Generated from tools/bridge-contract-source.mjs; includes Zod, not DSH implementation code.\n/* Zod 4.4.3 license:\n' + zodLicense + '\n*/' },
 });
+await fs.copyFile(new URL('src/version.js', root), new URL('lib/version.js', root));
 await fs.copyFile(new URL('src/host-bridge.js', root), new URL('lib/index.js', root));
 console.log('Built strict browser/Host contract and Host entry.');

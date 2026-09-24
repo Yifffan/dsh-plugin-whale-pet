@@ -2,28 +2,44 @@ import * as WhaleBridgeContract from '../lib/remote.js';
 
 // Shared only for overlapping mounts of this widget; never duplicate a Remote method.
 const whaleRemoteMounts = new WeakMap();
-function acquireWhaleRemote(ctx, remote) {
+function acquireWhaleRemote(ctx, remote, diagnostics) {
   // Cordis returns a fresh traced service wrapper on each get; root Context is stable.
   const owner = ctx.root ?? remote;
   let entry = whaleRemoteMounts.get(owner);
   if (!entry || entry.closed || entry.failed) {
     const previous = entry?.closing;
     entry = { refs: 0, closed: false, failed: false };
-    entry.ready = Promise.resolve(previous).catch(() => {}).then(() => remote.$mount(WhaleBridgeContract.TYPERT_REMOTE));
-    entry.ready.catch(() => { entry.failed = true; });
+    // $mount installs LOCAL descriptors only; it does not check Host readiness.
+    entry.ready = Promise.resolve(previous).catch(() => {}).then(() => {
+      diagnostics?.record('mount-attempt');
+      return remote.$mount(WhaleBridgeContract.TYPERT_REMOTE);
+    }).then(unmount => {
+      diagnostics?.record('mount-ready');
+      return unmount;
+    }, () => {
+      entry.failed = true;
+      diagnostics?.record('mount-failure');
+      throw new Error('Local whale mount failed');
+    });
+    // A disconnected observer can own the lease without awaiting it yet.
+    entry.ready.catch(() => {});
     whaleRemoteMounts.set(owner, entry);
   }
   entry.refs += 1;
   let released = false;
   return {
     ready: entry.ready,
+    get failed() { return entry.failed; },
     release() {
       if (released) return;
       released = true;
       entry.refs -= 1;
       if (entry.refs !== 0) return;
-      entry.closing = entry.ready.then(async unmount => {
-        if (entry.refs !== 0) return;
+      // Zero-ref transitions can overlap before ready settles. Serialize their
+      // cleanup promises so a successor also waits for the actual unmount, and
+      // never call the same unmount twice after a pending lease is reacquired.
+      entry.closing = Promise.resolve(entry.closing).then(() => entry.ready).then(async unmount => {
+        if (entry.refs !== 0 || entry.closed) return;
         entry.closed = true;
         await unmount();
       }).catch(() => {}).finally(() => {
@@ -39,7 +55,7 @@ function acquireWhaleRemote(ctx, remote) {
  * onReset({reason?,hostEpoch?,streamSeq?,identities?}) discards unplayed notifications.
  * onHealth(boolean) concerns this completion stream only, NOT root running/pending.
  */
-export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth } = {}) {
+export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth, diagnostics } = {}) {
   let disposed = false;
   let generationKey;
   let revision = 0;
@@ -49,14 +65,16 @@ export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth } = {})
   let health;
   const subscriptions = [];
   const call = (fn, value) => { if (!disposed) { try { fn?.(value); } catch { /* UI callbacks cannot poison transport. */ } } };
-  const setHealth = value => { if (health !== value) { health = value; call(onHealth, value); } };
+  const record = (event, details) => diagnostics?.record(event, details);
+  const reset = value => { record('reset', { reason: value.type === 'baseline' ? 'baseline' : value.reason }); call(onReset, value); };
+  const setHealth = value => { if (health !== value) { health = value; record('health', { ready: value }); call(onHealth, value); } };
   const remote = ctx.remote;
   if (!remote || typeof remote.$mount !== 'function') {
     setHealth(false);
-    call(onReset, { reason: 'unavailable' });
+    reset({ reason: 'unavailable' });
     return () => { disposed = true; };
   }
-  const lease = acquireWhaleRemote(ctx, remote);
+  let lease = acquireWhaleRemote(ctx, remote, diagnostics);
   const connected = () => ctx.connection?.state?.getSnapshot?.() === 'connected';
   const retire = () => {
     revision += 1;
@@ -74,40 +92,61 @@ export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth } = {})
     const current = { abort: new AbortController(), handle: undefined };
     run = current;
     setHealth(false);
-    call(onReset, { reason: 'connecting' });
+    reset({ reason: 'connecting' });
     const active = () => !disposed && token === revision && connected();
     void (async () => {
       let epoch;
       let watermark = -1;
+      let phase = 'mount';
       try {
+        // A rejected LOCAL registration is not reusable. Reacquire through the
+        // shared root map so simultaneous retries still install one namespace.
+        // Ordinary watch failures retain a successful lease and never remount.
+        if (lease.failed) {
+          lease.release();
+          lease = acquireWhaleRemote(ctx, remote, diagnostics);
+        }
         await lease.ready;
         if (!active()) return;
+        phase = 'watch';
+        record('watch-attempt');
         current.handle = remote.whalePet.watch(current.abort.signal);
         for await (const value of current.handle) {
           if (!active()) return;
+          phase = 'parser';
           const frame = WhaleBridgeContract.WHALE_FRAME_SCHEMA.parse(value);
+          phase = 'order';
           if (frame.type === 'baseline') {
             epoch = frame.hostEpoch;
             watermark = frame.streamSeq;
-            call(onReset, frame);
+            record('baseline');
+            reset(frame);
             setHealth(true);
             retryDelay = 1000;
+            phase = 'watch';
             continue;
           }
+          record(frame.type === 'turn/start' ? 'received-start' : 'received-end', { reason: frame.reason });
           if (epoch === undefined || frame.hostEpoch !== epoch) throw new Error('Bridge baseline required');
-          if (frame.streamSeq <= watermark) continue;
+          if (frame.streamSeq <= watermark) { record('duplicate'); phase = 'watch'; continue; }
           if (frame.streamSeq !== watermark + 1) throw new Error('Bridge sequence gap');
           watermark = frame.streamSeq;
+          record(frame.type === 'turn/start' ? 'start' : 'end', { reason: frame.reason });
           call(onBoundary, { ...frame, id: `${epoch}:${frame.streamSeq}` });
+          phase = 'watch';
         }
-      } catch { /* health/reset describe failure; never forward transport details or data. */ }
+        if (active()) record('eof');
+      } catch {
+        if (active() && phase !== 'mount') record(phase === 'parser' ? 'parser-failure' : phase === 'order' ? 'order-failure' : 'watch-failure');
+        // Never forward exception details or raw frames into diagnostics.
+      }
       finally {
         current.abort.abort();
         try { await current.handle?.dispose?.(); } catch { /* already closed */ }
         if (active()) {
           run = undefined;
           setHealth(false);
-          call(onReset, { reason: 'stream-ended' });
+          reset({ reason: 'stream-ended' });
           retry = setTimeout(() => { retry = undefined; start(); }, retryDelay);
           retryDelay = Math.min(10000, retryDelay * 2);
         }
@@ -122,7 +161,7 @@ export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth } = {})
     retryDelay = 1000;
     retire();
     setHealth(false);
-    call(onReset, { reason: key === null ? 'disconnected' : 'generation' });
+    reset({ reason: key === null ? 'disconnected' : 'generation' });
     if (key !== null) start();
   };
   for (const store of [ctx.connection?.state, ctx.connection?.generation]) {
@@ -135,5 +174,39 @@ export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth } = {})
     retire();
     for (const unsubscribe of subscriptions) unsubscribe();
     lease.release();
+    record('disposed');
   };
+}
+
+/** One user-requested, cancellable read. No polling and no extra mount/transport. */
+export async function refreshHostDiagnostics(ctx, diagnostics, { signal, timeoutMs = 3000 } = {}) {
+  diagnostics.record('host-request');
+  const unavailable = reason => diagnostics.record('host-unavailable', { reason });
+  if (signal?.aborted) { unavailable('aborted'); return; }
+  if (ctx.connection?.state?.getSnapshot?.() !== 'connected') { unavailable('disconnected'); return; }
+  const service = ctx.remote?.whalePet;
+  if (typeof service?.diagnostics !== 'function') { unavailable('unavailable'); return; }
+  const abort = new AbortController();
+  let timer, onAbort;
+  try {
+    const interrupted = new Promise(resolve => {
+      onAbort = () => { abort.abort(); resolve({ unavailable: 'aborted' }); };
+      signal?.addEventListener('abort', onAbort, { once: true });
+      timer = setTimeout(() => { abort.abort(); resolve({ unavailable: 'timeout' }); }, Math.max(1, Math.min(10000, timeoutMs)));
+    });
+    // Promise.race observes late rejection even if a broken carrier ignores abort.
+    const request = Promise.resolve().then(() => service.diagnostics(abort.signal));
+    const result = await Promise.race([request, interrupted]);
+    if (result?.unavailable) { unavailable(result.unavailable); return; }
+    if (signal?.aborted) { unavailable('aborted'); return; }
+    if (result?.ok !== true) { unavailable('remote-failure'); return; }
+    const parsed = WhaleBridgeContract.WHALE_DIAGNOSTICS_SCHEMA?.safeParse(result.value);
+    if (!parsed?.success) { unavailable('invalid'); return; }
+    diagnostics.record('host-snapshot', parsed.data);
+  } catch { unavailable('remote-failure'); }
+  finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', onAbort);
+    abort.abort();
+  }
 }

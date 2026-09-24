@@ -10,7 +10,9 @@ A little companion that lives inside your DeepSeek Harness (DSH) window—there 
 
 一只住在 DSH 窗口里的小鲸鱼。陪你工作、等你决定，也陪你好好打个盹。
 
-> **Experimental release: 0.2.8-beta.1.** Compatibility target: DSH Desktop 0.1.6-alpha.2. Celebration may not appear after a completed reply in the installed app; this known issue is not fixed in this public beta. Passing isolated tests does not establish that the issue is resolved.
+> **Local diagnostic build: 0.2.8-beta.2 — not published to npm.** Compatibility target: DSH Desktop 0.1.6-alpha.2. This build adds a privacy-safe **Sync diagnostics** menu and fixes a reproduced local Remote-registration retry defect. It does not establish that the installed missing-celebration issue is solved. See the [diagnostic guide](DIAGNOSTICS.md).
+
+Install this diagnostic build using the provided `dsh-plugin-whale-pet-0.2.8-beta.2.tgz` local package after current tasks finish. The npm/GitHub installation links below still refer to the previously published beta.1, not this local diagnostic build.
 
 ## Features
 

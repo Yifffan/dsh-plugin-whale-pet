@@ -1,4 +1,6 @@
-// Read-only Host event bridge. No transcript retention, request handlers or HTTP routes.
+import { WHALE_VERSION } from './version.js';
+
+// Read-only Host event bridge. No transcript retention or HTTP routes.
 export const name = 'whalePet';
 export const inject = ['agents'];
 export const BRIDGE_QUEUE_LIMIT = 128;
@@ -12,6 +14,8 @@ export function runtimeIdentity(agents, sessionId) {
 }
 
 export class WhaleBoundaryHub {
+  #accepted = { starts: 0, ends: 0, completed: 0 };
+  diagnostics() { return { version: WHALE_VERSION, ...this.#accepted }; }
   constructor({ agents, epoch = globalThis.crypto.randomUUID(), queueLimit = BRIDGE_QUEUE_LIMIT } = {}) {
     this.agents = agents;
     this.hostEpoch = epoch;
@@ -48,6 +52,11 @@ export class WhaleBoundaryHub {
       const kind = event.data?.reason?.kind;
       frame.reason = typeof kind === 'string' ? kind.slice(0, 80) : 'unknown';
     }
+    // Accepted live boundaries only, after the same validation/dedup gates.
+    // Counts are Hub-lifetime totals, not inferred from stored log history.
+    const counter = event.type === 'turn/start' ? 'starts' : 'ends';
+    this.#accepted[counter] = Math.min(1000000, this.#accepted[counter] + 1);
+    if (frame.reason === 'completed') this.#accepted.completed = Math.min(1000000, this.#accepted.completed + 1);
     for (const client of this.clients) client.push(frame);
   }
   watch(signal) {
@@ -100,7 +109,10 @@ export class WhaleBoundaryHub {
 
 export function apply(ctx) {
   const hub = new WhaleBoundaryHub({ agents: ctx.get('agents') });
-  const service = { watch(signal) { return hub.watch(signal); } };
+  const service = {
+    watch(signal) { return hub.watch(signal); },
+    diagnostics(_signal) { return hub.diagnostics(); },
+  };
   // Public Cordis service + the exact visible protocol binding. Strict reflection is
   // contributed separately by ./typert; no SRC discovery or decorator fallback.
   service.typertRemote = Object.freeze({ service, serviceKey: name, namespace: name });
