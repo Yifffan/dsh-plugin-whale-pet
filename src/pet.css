@@ -1,0 +1,84 @@
+:host{all:initial;position:fixed;inset:0;pointer-events:none;z-index:30;font-family:var(--dsw-font-family,inherit);color-scheme:inherit;
+/* Inherit live official tokens. Fallbacks match Desktop for offline rendering. */
+--ink:var(--dsw-alias-label-primary,light-dark(#0f1115,#f9fafb));--muted:var(--dsw-alias-label-secondary,light-dark(#61666b,#cfd3d6));--tertiary:var(--dsw-alias-label-tertiary,light-dark(#81858c,#adb2b8));
+--surface:var(--dsw-specific-menu,light-dark(#f8f9fa94,#30313680));--border:var(--dsw-alias-border-l3,light-dark(#0000001f,#ffffff29));--hairline:var(--dsw-alias-border-l1,light-dark(#0000000a,#ffffff0f));--divider:var(--dsw-alias-border-l2,light-dark(#0000001a,#ffffff1f));
+--accent:var(--dsw-alias-brand-primary,light-dark(#0f1115,#f9fafb));--foreground:var(--dsw-alias-label-primary-foreground,light-dark(#ffffff,#0f1115));--tint:var(--dsw-alias-interactive-bg-hover,light-dark(#2631480f,#ffffff14));--active:var(--dsw-alias-interactive-bg-active,light-dark(#2631481a,#ffffff24));--control:var(--dsw-alias-bg-module-platform,light-dark(#f9fafb,#353638));
+/* Soft selector emphasis, derived from the live official palette. */
+--control-fill:light-dark(color-mix(in srgb,var(--control) 97%,var(--ink) 3%),color-mix(in srgb,var(--control) 90%,var(--ink) 10%));--control-hover:light-dark(color-mix(in srgb,var(--control) 95%,var(--ink) 5%),color-mix(in srgb,var(--control) 88%,var(--ink) 12%));--control-active:light-dark(color-mix(in srgb,var(--control) 93%,var(--ink) 7%),color-mix(in srgb,var(--control) 86%,var(--ink) 14%));--control-line:var(--dsw-alias-border-l2,light-dark(#0000001a,#ffffff1f));
+--menu-blur:var(--dsw-menu-backdrop-filter,blur(40px) saturate(150%));
+--bubble-bg:light-dark(#f0f4ff,#ffffff);--bubble-ink:#394565;--bubble-line:light-dark(#dbe2ef,transparent);--bubble-shadow:light-dark(#52658d20,#0000002b)}
+*{box-sizing:border-box}button,input,select{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:4px}[hidden]{display:none!important}
+.pet{position:fixed;width:156px;height:156px;pointer-events:none;isolation:isolate;user-select:none;-webkit-user-select:none;transform-origin:50% 100%}
+.pet-button{all:unset;box-sizing:border-box;display:flex;align-items:flex-end;justify-content:center;width:100%;height:100%;padding:20px 9px 17px;cursor:grab;touch-action:none;pointer-events:auto;-webkit-app-region:no-drag;border-radius:28px;position:relative}
+.pet-button:active{cursor:grabbing}.pet-button:focus-visible{outline:2px dashed var(--accent);outline-offset:0}
+.pet-art{display:block;position:relative;width:100%;height:100%;pointer-events:none;transform-origin:50% 90%;filter:drop-shadow(0 4px 2px #253e7320);will-change:transform}
+.pet-image{display:block;width:100%;height:100%;object-fit:contain;object-position:center bottom;pointer-events:none}
+/* Match working.svg's 116×89 coordinate space exactly: no object-fit gutter under the counter. */
+.pet[data-state=working] .pet-art{height:auto;aspect-ratio:116/89;max-height:100%}
+.working-count{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.working-count-text{fill:#283a83;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:0}
+.ground{position:absolute;bottom:8px;left:26%;right:26%;height:7px;filter:blur(3px);background:#506e9a1a;border-radius:50%;pointer-events:none}
+.bubble{position:absolute;left:0;top:0;background:transparent;color:var(--bubble-ink);border:1px solid transparent;box-shadow:none;border-radius:20px 22px 21px 19px;isolation:isolate;padding:11px 18px 12px;font-family:"Whale Bubble Latin","Whale Bubble Han","PingFang SC","Microsoft YaHei",sans-serif;font-size:15px;font-weight:500;font-synthesis:none;line-height:1.4;letter-spacing:.015em;-webkit-font-smoothing:antialiased;width:max-content;min-width:min(126px,calc(100vw - 24px));white-space:normal;text-wrap:balance;overflow-wrap:anywhere;text-align:center;max-width:min(260px,calc(100vw - 24px));opacity:0;transition:opacity .18s,translate .18s;translate:0 4px;pointer-events:none}
+.bubble-surface{display:block;position:absolute;left:-1px;top:-1px;width:calc(100% + 2px);height:calc(100% + 2px);overflow:visible;pointer-events:none;z-index:-1;filter:drop-shadow(0 6px 9px var(--bubble-shadow))}
+.bubble-surface path{fill:var(--bubble-bg);stroke:var(--bubble-line);stroke-width:1;vector-effect:non-scaling-stroke}
+.bubble-message{position:relative}
+.bubble::before,.bubble::after{content:"";position:absolute;background:var(--bubble-bg);border:0;border-radius:50%;pointer-events:none;box-sizing:border-box}
+.bubble::before{width:11px;height:11px;left:var(--tail-x,40%);bottom:-16px}
+.bubble::after{width:6px;height:6px;left:calc(var(--tail-x,40%) + 12px);bottom:-26px}
+.bubble[data-side=below]::before{top:-16px;bottom:auto}.bubble[data-side=below]::after{top:-26px;bottom:auto}
+.pet:hover .bubble,.pet:focus-within .bubble,.pet[data-notice=true] .bubble{opacity:1;translate:0 0}
+.pet[data-state=resting] .pet-art{animation:whale-breathe 4.2s ease-in-out infinite}.pet[data-state=working] .pet-art{animation:whale-work 2.8s ease-in-out infinite}.pet[data-state=waiting] .pet-art{animation:whale-question 2.8s ease-in-out infinite}.pet[data-state=celebrate] .pet-art{animation:whale-cheer .85s ease-in-out 5}.pet[data-state=sleeping] .pet-art{animation:whale-sleep 5.8s ease-in-out infinite}.pet[data-state=error] .pet-art{animation:whale-oops .65s ease-out 1}
+.pet[data-touch=true] .pet-art{animation:whale-hello .6s ease-in-out 2}.pet[data-dragging=true] .pet-art{animation-play-state:paused!important;rotate:-3deg}
+@keyframes whale-breathe{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(-2px) scaleY(1.022)}}
+@keyframes whale-work{0%,100%{transform:rotate(-.35deg) translateY(0)}35%{transform:rotate(.3deg) translateY(-.6px)}65%{transform:rotate(-.15deg) translateY(-.3px)}}
+@keyframes whale-question{0%,70%,100%{transform:rotate(0)}20%{transform:rotate(-3deg) translateY(-3px)}40%{transform:rotate(2deg) translateY(-2px)}}
+@keyframes whale-cheer{0%,100%{transform:translateY(0) rotate(-4deg)}40%{transform:translateY(-14px) rotate(5deg)}70%{transform:translateY(-3px) rotate(0)}}
+@keyframes whale-sleep{0%,100%{transform:scale(1,1)}50%{transform:scale(1.015,1.035)}}
+@keyframes whale-oops{0%{transform:translateY(0) rotate(0)}35%{transform:translateY(2px) rotate(-2deg)}70%{transform:translateY(-1px) rotate(1deg)}100%{transform:translateY(0) rotate(0)}}
+@keyframes whale-hello{0%,100%{transform:rotate(0)}30%{transform:rotate(-5deg) translateY(-5px)}70%{transform:rotate(4deg)}}
+.sparkles{position:absolute;inset:0;pointer-events:none;display:none}.pet[data-state=celebrate] .sparkles{display:block}.sparkles span{position:absolute;color:#dca44f;font-size:18px;animation:whale-sparkle 1s ease-in-out infinite}.sparkles span:nth-child(1){left:5%;top:22%}.sparkles span:nth-child(2){right:6%;top:6%;animation-delay:.2s;font-size:13px}.sparkles span:nth-child(3){right:0;top:50%;animation-delay:.4s;font-size:11px}@keyframes whale-sparkle{0%,100%{opacity:.25;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}
+/* Restore DSH's global corner treatment inside this shadow root, only on UI surfaces.
+   Circular switches/dots/thumbs and the explicit SVG bubble geometry stay untouched. */
+.panel,.restore,.panel button,.setting select,.setting option{corner-shape:var(--dsw-corner-shape,superellipse(1.5))}
+.setting select::picker(select){corner-shape:var(--dsw-corner-shape,superellipse(1.5))}
+/* Official menu elevation, resolved locally: body * rules cannot enter a shadow root. */
+.panel,.restore{background:var(--surface);backdrop-filter:var(--menu-blur);box-shadow:0 0 0 .5px var(--hairline),0 3px 8px #0000000a,0 0 20px #0000000d}
+.panel{pointer-events:auto;position:fixed;z-index:2;width:280px;max-width:calc(100vw - 24px);max-height:calc(100vh - 80px);overflow:auto;border:0;border-radius:16px;padding:14px;color:var(--ink);font-size:13px;line-height:20px;scrollbar-width:thin;scrollbar-color:var(--border) transparent;-webkit-app-region:no-drag}
+.panel-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}.panel-head strong{font-size:14px;flex:1;font-weight:600}
+.close{display:grid;place-items:center;flex:none;border:0;background:transparent;color:var(--muted);width:28px;height:28px;padding:0;border-radius:8px}.close:hover{background:var(--tint);color:var(--ink)}
+.subtitle{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:19px}
+.setting{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px;margin:6px 0}.setting label{flex:1;min-width:0;cursor:pointer}.size-value{margin-left:3px;font-size:11px;font-variant-numeric:tabular-nums;color:var(--tertiary)}
+/* Match the official chat settings PreferenceRow trigger, including its DSH icon. */
+.select-control{position:relative;display:block;flex:none;width:152px;max-width:65%}
+.setting select{appearance:none;display:inline-flex;align-items:center;gap:12px;width:100%;min-width:0;height:36px;background:var(--control-fill);color:var(--ink);border:0;border-radius:18px;box-shadow:inset 0 0 0 .5px var(--control-line);padding:0 40px 0 14px;font-size:14px;line-height:22px;cursor:pointer;text-overflow:ellipsis;white-space:nowrap}.setting select:hover{background:var(--control-hover)}.setting select:active,.setting select:open{background:var(--control-active)}
+.select-arrow{position:absolute;right:14px;top:50%;transform:translateY(-50%);display:block;width:14px;height:14px;pointer-events:none;color:var(--ink)}.select-arrow svg{display:block;width:14px;height:14px}
+/* Chrome 152 in Desktop supports fully themeable native pickers: keyboard,
+   screen-reader semantics and viewport placement stay browser-owned. */
+@supports(appearance:base-select){
+.setting select,.setting select::picker(select){appearance:base-select}
+/* Concentric nesting: item radius + popup inset = popup radius. */
+.setting select{--picker-radius:16px;--picker-inset:4px}
+.setting select::picker-icon{display:none}
+.setting select::picker(select){pointer-events:auto;color:var(--ink);background:var(--surface);backdrop-filter:var(--menu-blur);border:0;border-radius:var(--picker-radius);padding:var(--picker-inset);margin-block:4px;min-width:144px;max-width:calc(100vw - 24px);max-height:240px;overflow:auto;font-family:inherit;font-size:13px;line-height:20px;box-shadow:0 0 0 .5px var(--hairline),0 3px 8px #0000000a,0 0 20px #0000000d}
+.setting option{display:flex;align-items:center;gap:6px;min-height:34px;padding:6px 8px;border:0;border-radius:max(0px,calc(var(--picker-radius) - var(--picker-inset)));background:transparent;color:var(--ink);cursor:pointer;font-size:13px;line-height:20px}
+.setting option:focus{outline:none}
+.setting option:not(:checked):hover{background:var(--tint);color:var(--ink)}
+.setting option:checked{background:transparent}
+.setting option:not(:checked):focus-visible{outline:1px solid var(--divider);outline-offset:-2px}
+.setting option::checkmark{order:1;margin-left:auto;color:var(--accent)}
+}
+.setting input[type=range]{appearance:none;flex:none;width:132px;max-width:60%;height:28px;margin:0;background:transparent;cursor:pointer;accent-color:var(--accent);border-radius:8px}
+.setting input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:99px;background:linear-gradient(to right,var(--accent) 0 var(--range-progress,0%),var(--border) var(--range-progress,0%) 100%)}
+.setting input[type=range]::-webkit-slider-thumb{appearance:none;width:14px;height:14px;margin-top:-5px;border:2px solid var(--foreground);border-radius:50%;background:var(--accent);box-shadow:0 0 0 1px var(--border)}
+.setting input[type=range]::-moz-range-track{height:4px;border-radius:99px;background:var(--border)}
+.setting input[type=range]::-moz-range-progress{height:4px;border-radius:99px;background:var(--accent)}
+.setting input[type=range]::-moz-range-thumb{width:10px;height:10px;border:2px solid var(--foreground);border-radius:50%;background:var(--accent);box-shadow:0 0 0 1px var(--border)}
+.setting input[type=checkbox]{appearance:none;position:relative;flex:none;width:36px;height:20px;margin:0;border:0;border-radius:99px;background:var(--border);cursor:pointer;transition:background .15s}
+.setting input[type=checkbox]::before{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--foreground);transition:transform .15s}
+.setting input[type=checkbox]:checked{background:var(--accent)}.setting input[type=checkbox]:checked::before{transform:translateX(16px)}
+.panel button:focus-visible,.panel input:focus-visible,.panel select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.panel-actions{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:.5px solid var(--divider)}
+.action{flex:1;min-width:0;min-height:32px;border:1px solid var(--border);background:transparent;color:var(--ink);border-radius:8px;padding:5px 8px;font-size:12px;line-height:20px}.action:hover{background:var(--tint)}.action:active,.close:active{background:var(--active)}
+.restore{position:fixed;right:18px;bottom:18px;pointer-events:auto;border:0;color:var(--muted);border-radius:99px;padding:7px 11px;font-size:11px;-webkit-app-region:no-drag}.restore:hover{color:var(--ink);background:var(--control)}
+:host([data-paused=true]) *,:host([data-motion=false]) *{animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.pet-art{will-change:auto}}

@@ -1,0 +1,4 @@
+# Add only our plugin row. Does not replace any official DSH component.
+- insert:
+    - id: whale-pet
+      name: dsh-plugin-whale-pet

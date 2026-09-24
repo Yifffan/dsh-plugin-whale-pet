@@ -1,0 +1,49 @@
+{
+  "name": "dsh-plugin-whale-pet",
+  "version": "0.2.8-beta.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Yifffan/dsh-plugin-whale-pet.git"
+  },
+  "homepage": "https://github.com/Yifffan/dsh-plugin-whale-pet",
+  "bugs": { "url": "https://github.com/Yifffan/dsh-plugin-whale-pet/issues" },
+  "packageManager": "pnpm@11.7.0",
+  "description": "Your little whale buddy for work, wins, and well-earned naps.",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./typert": "./lib/typert.host.js",
+    "./remote": "./lib/remote.js",
+    "./locale/en.json": "./locale/en.json",
+    "./locale/zh.json": "./locale/zh.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": ["lib", "assets", "locale", "cordis.patch.yml", "README.md", "LICENSE", "ASSETS-LICENSE.md", "FONT-LICENSES.md", "COMPATIBILITY.md", "UPGRADE.md"],
+  "scripts": {
+    "build": "node tools/bridge-build.mjs && node tools/build.mjs",
+    "build:bridge": "node tools/bridge-build.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": { "esbuild": "0.25.12", "zod": "4.4.3" },
+  "engines": { "node": ">=22" },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-session",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-primitives"
+      ]
+    }
+  }
+}

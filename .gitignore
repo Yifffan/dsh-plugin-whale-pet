@@ -1,0 +1,12 @@
+node_modules/
+.pnpm-store/
+artifacts/
+preview/
+*.tgz
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+*.pem
+*.key

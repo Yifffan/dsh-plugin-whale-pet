@@ -1,0 +1,12 @@
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+*.svg -text
+*.png -text
+*.woff2 -text
