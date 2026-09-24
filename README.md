@@ -24,11 +24,17 @@ This is an in-window plugin, not a separate operating-system desktop overlay.
 
 ## Install the beta
 
-### 1. npm package — coming soon
+### 1. npm package — available now
 
-Planned package page: [dsh-plugin-whale-pet on npm](https://www.npmjs.com/package/dsh-plugin-whale-pet).
+Package page: [dsh-plugin-whale-pet on npm](https://www.npmjs.com/package/dsh-plugin-whale-pet).
 
-**Not published yet.** This is the planned npm address, not an available package. Once published, the package name and published version can be entered in DSH's plugin installation interface.
+Enter this pinned version in DSH's plugin installation interface:
+
+```text
+dsh-plugin-whale-pet@0.2.8-beta.1
+```
+
+You can also use `dsh-plugin-whale-pet@beta` to follow the beta channel. This is a prerelease, not a stable-release certification.
 
 ### 2. GitHub — available now
 
@@ -40,13 +46,11 @@ github:Yifffan/dsh-plugin-whale-pet#v0.2.8-beta.1
 
 The tagged source snapshot includes prebuilt plugin files; users do not need to build it themselves.
 
-### 3. Download a local package — coming soon
+### 3. Download a local package — available now
 
-[Download the local plugin package (.tgz) — placeholder](https://github.com/Yifffan/dsh-plugin-whale-pet/releases)
+[Download dsh-plugin-whale-pet-0.2.8-beta.1.tgz](https://registry.npmjs.org/dsh-plugin-whale-pet/-/dsh-plugin-whale-pet-0.2.8-beta.1.tgz)
 
-**No plugin tgz has been uploaded yet.** This placeholder currently opens the Releases page; it will be replaced with a direct package-download link when an asset is published.
-
-Once available, download the tgz onto the machine running DSH and enter its absolute local path in DSH's plugin installation interface. GitHub's automatically generated “Source code” archives are not plugin tgz packages.
+This download is hosted by the npm registry. Download the tgz onto the machine running DSH and enter its absolute local path in DSH's plugin installation interface. GitHub's automatically generated “Source code” archives are not plugin tgz packages.
 
 **Upgrading from 0.2.6 or earlier? Read the [upgrade notes](UPGRADE.md) first.** Overrides for the old entry ID do not migrate automatically. Do not replace the plugin or restart DSH while tasks are running. This plugin never automatically edits your profile.
 
