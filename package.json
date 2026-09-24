@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-whale-pet",
-  "version": "0.2.8-beta.3",
+  "version": "0.2.8",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Yifffan/dsh-plugin-whale-pet.git"
@@ -22,7 +22,7 @@
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["lib", "assets", "locale", "cordis.patch.yml", "README.md", "LICENSE", "ASSETS-LICENSE.md", "FONT-LICENSES.md", "COMPATIBILITY.md", "UPGRADE.md", "DIAGNOSTICS.md"],
+  "files": ["lib", "assets", "locale", "cordis.patch.yml", "README.md", "LICENSE", "ASSETS-LICENSE.md", "FONT-LICENSES.md", "COMPATIBILITY.md", "UPGRADE.md", "CHANGELOG.md"],
   "scripts": {
     "build": "node tools/bridge-build.mjs && node tools/build.mjs",
     "build:bridge": "node tools/bridge-build.mjs",

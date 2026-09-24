@@ -2,7 +2,7 @@
 
 **Your little whale buddy for work, wins, and well-earned naps.**
 
-![Six whale states: working, waiting, celebrating, error, resting, and sleeping](docs/images/whale-states.png)
+![Six whale states: working, waiting, celebrating, error, resting, and sleeping](https://raw.githubusercontent.com/Yifffan/dsh-plugin-whale-pet/v0.2.8/docs/images/whale-states.png)
 
 *Character state overview. Whale stickers are original artwork by DeepSeek.*
 
@@ -10,9 +10,7 @@ A little companion that lives inside your DeepSeek Harness (DSH) window—there 
 
 一只住在 DSH 窗口里的小鲸鱼。陪你工作、等你决定，也陪你好好打个盹。
 
-> **Local test build: 0.2.8-beta.3 — not published to npm.** Compatibility target: DSH Desktop 0.1.6-alpha.2. This build fixes missing `remote.whalePet` dependency injection when calling the custom completion stream and diagnostic RPC, and retains the privacy-safe **Sync diagnostics** menu. The dependency failure was reproduced with real DSH Gateway/Cordis; the updated installed behavior still needs user verification. See the [diagnostic guide](DIAGNOSTICS.md).
-
-Install this test build using the provided `dsh-plugin-whale-pet-0.2.8-beta.3.tgz` local package after current tasks finish. The npm/GitHub installation links below still refer to the previously published beta.1, not this local test build.
+**Version 0.2.8** fixes completion synchronization and removes the temporary diagnostic interface. Normal-reply celebration was confirmed in the installed app with the namespace fix. See the [release notes](CHANGELOG.md) and [compatibility notes](COMPATIBILITY.md) for verification scope.
 
 ## Features
 
@@ -24,39 +22,39 @@ Install this test build using the provided `dsh-plugin-whale-pet-0.2.8-beta.3.tg
 
 This is an in-window plugin, not a separate operating-system desktop overlay.
 
-## Install the beta
+## Install
 
-### 1. npm package — available now
+### 1. npm package
 
 Package page: [dsh-plugin-whale-pet on npm](https://www.npmjs.com/package/dsh-plugin-whale-pet).
 
-Enter this pinned version in DSH's plugin installation interface:
+Enter the package name in DSH's plugin installation interface:
 
 ```text
-dsh-plugin-whale-pet@0.2.8-beta.1
+dsh-plugin-whale-pet
 ```
 
-You can also use `dsh-plugin-whale-pet@beta` to follow the beta channel. This is a prerelease, not a stable-release certification.
+To pin this release, use `dsh-plugin-whale-pet@0.2.8`. The normal package name follows npm's `latest` channel; the old `beta` channel is not required.
 
-### 2. GitHub — available now
+### 2. GitHub
 
 Enter this pinned version spec in DSH's plugin installation interface:
 
 ```text
-github:Yifffan/dsh-plugin-whale-pet#v0.2.8-beta.1
+github:Yifffan/dsh-plugin-whale-pet#v0.2.8
 ```
 
-The tagged source snapshot includes prebuilt plugin files; users do not need to build it themselves.
+The tagged source includes prebuilt plugin files; users do not need to build it themselves.
 
-### 3. Download a local package — available now
+### 3. Download a local package
 
-[Download dsh-plugin-whale-pet-0.2.8-beta.1.tgz](https://registry.npmjs.org/dsh-plugin-whale-pet/-/dsh-plugin-whale-pet-0.2.8-beta.1.tgz)
+[Download dsh-plugin-whale-pet-0.2.8.tgz](https://registry.npmjs.org/dsh-plugin-whale-pet/-/dsh-plugin-whale-pet-0.2.8.tgz)
 
-This download is hosted by the npm registry. Download the tgz onto the machine running DSH and enter its absolute local path in DSH's plugin installation interface. GitHub's automatically generated “Source code” archives are not plugin tgz packages.
+Download the tgz onto the machine running DSH and enter its absolute local path in DSH's plugin installation interface. The package is also attached to the [GitHub release](https://github.com/Yifffan/dsh-plugin-whale-pet/releases/tag/v0.2.8). GitHub's automatically generated “Source code” archives are not plugin tgz packages.
 
 **Upgrading from 0.2.6 or earlier? Read the [upgrade notes](UPGRADE.md) first.** Overrides for the old entry ID do not migrate automatically. Do not replace the plugin or restart DSH while tasks are running. This plugin never automatically edits your profile.
 
-If host modules need reloading after installation or activation, wait for current tasks to finish, fully quit DSH, and reopen it. Closing a window may not quit the application. Restarting is not a guaranteed fix for the known celebration issue.
+After an update that changes Host or client modules, wait for current tasks to finish, fully quit DSH, and reopen it. Closing a window may not quit the application.
 
 ## Usage
 
@@ -66,14 +64,15 @@ If host modules need reloading after installation or activation, wait for curren
 - Global scope covers ordinary main sessions on the currently connected Host—not multiple devices or Hosts.
 - Waiting for user input has higher display priority. Brief completion notices are not queued for later replay.
 
-## Known issues and verification limits
+## Compatibility and behavior
 
-1. **Celebration may not appear in the installed app.** Current-session and global modes share the completion stream, and both have reports of missed celebrations. The cause has not been isolated to connection, event filtering, or display priority.
-2. **Historical entry-ID change.** Since 0.2.7, the entry ID is `whale-pet`; the module name remains `dsh-plugin-whale-pet`. Older overrides require migration.
-3. DSH is still in alpha, and plugin interfaces may change. Other DSH versions and operating-system combinations are not certified.
-4. The offline preview deliberately simulates completion. It validates rendering and state transitions, not delivery of real session events.
+- Originally developed for **DSH Desktop 0.1.6-alpha.2 on macOS arm64**. DSH is still evolving; other version/platform combinations are not universally certified.
+- The completion fix was checked against real DSH Gateway/Cordis modules, and the user confirmed celebration in the installed app. This does not claim exhaustive live testing of every concurrent-session, reconnect, cancellation or upgrade scenario.
+- Since 0.2.7, the entry ID is `whale-pet`; the module name remains `dsh-plugin-whale-pet`. Older overrides require migration.
+- Completion uses live normal turn-end events. Intermediate assistant/tool messages, cancellation, disconnected history and work-count changes are not treated as successful completion.
+- The offline preview simulates completion; it validates rendering, not delivery of live DSH events.
 
-See [compatibility and verification boundaries](COMPATIBILITY.md). When [reporting an issue](https://github.com/Yifffan/dsh-plugin-whale-pet/issues), include DSH/plugin versions, session scope, and reproduction steps. Remove chat content, session identifiers, and other sensitive information.
+When [reporting an issue](https://github.com/Yifffan/dsh-plugin-whale-pet/issues), include DSH/plugin versions, session scope, and reproduction steps. Remove chat content, session identifiers, and other sensitive information.
 
 ## Development and local preview
 
@@ -95,19 +94,20 @@ The preview does not connect to DSH or call a model. Its generic chevron is inde
 
 ```sh
 # After a successful build and test run, create a local plugin package:
-pnpm pack --pack-destination artifacts
+npm pack --ignore-scripts --pack-destination artifacts
 ```
 
-The package declares no installation lifecycle hooks to build code, migrate profiles, or download a runtime. Building and testing are explicit development steps. Prebuilt files are committed for Git installation; rebuild after source changes and commit matching outputs.
+The package declares no installation lifecycle hooks to build code, migrate profiles, or download a runtime. Building and testing are explicit development steps. Prebuilt files are committed for Git installation; rebuild after source changes and commit matching outputs. Automated regression tests are retained even though the temporary diagnostic menu and RPC have been removed.
 
-Fonts are bundled, so ordinary builds do not download them. New Chinese bubble text requires a glyph-coverage check; the first public snapshot does not include font-resubsetting tools. See [font sources and licenses](FONT-LICENSES.md).
+Fonts are bundled, so ordinary builds do not download them. New Chinese bubble text requires a glyph-coverage check; the font-resubsetting tools are not included in this repository. See [font sources and licenses](FONT-LICENSES.md).
 
 ## Privacy and runtime boundaries
 
 - Does not modify DSH itself, send model messages, add model inference calls, or act on approvals for you.
 - Uses DSH's existing authenticated connection. No additional listening port, telemetry, or runtime font/CDN requests.
 - The completion bridge projects only necessary session identity and turn-boundary metadata—not chat content.
-- Preferences stay in client-local storage. Tests use synthetic data. This repository contains no user profiles, session records, or extracted DSH implementation code.
+- Preferences stay in client-local storage. No runtime diagnostic report, diagnostic counters or diagnostic query endpoint is included in this release.
+- Tests use synthetic data. This repository contains no user profiles, session records, or extracted DSH implementation code.
 
 ## Artwork and project notice
 

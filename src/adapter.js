@@ -1,8 +1,7 @@
 import { WhaleWidget } from './widget.js';
 import { normalizeLanguage } from './i18n.js';
 import { SessionAggregate } from './global-state.js';
-import { observeGlobalEvents, refreshHostDiagnostics } from './bridge-client.js';
-import { WhaleDiagnostics } from './diagnostics.js';
+import { observeGlobalEvents } from './bridge-client.js';
 /** Only this file knows DSH's 0.1.6-alpha.2 client contract. No private DOM/API routes. */
 export function readDshLanguage(locale) {
   try { return normalizeLanguage(locale?.getSnapshot?.().active); } catch { return 'en'; }
@@ -89,26 +88,10 @@ export function observeSession(sessions, sessionId, { onBoundary, onReset = () =
 
 /** Lifecycle wiring kept outside React so reconnect/teardown can be contract-tested. */
 export function connectWhaleState(ctx, widget, getProjection, observeEvents = observeGlobalEvents) {
-  const diagnostics = widget.diagnostics || new WhaleDiagnostics();
-  widget.diagnostics = diagnostics;
-  const aggregate = new SessionAggregate(() => Date.now(), diagnostics);
+  const aggregate = new SessionAggregate();
   let alive = true;
-  let diagnosticsRequest;
-  const refreshDiagnostics = async () => {
-    if (!alive) return;
-    // Coalesce repeated clicks; this callback is never invoked by a timer.
-    if (diagnosticsRequest) return diagnosticsRequest.promise;
-    const request = { abort: new AbortController() };
-    diagnosticsRequest = request;
-    request.promise = refreshHostDiagnostics(ctx, diagnostics, { signal: request.abort.signal })
-      .catch(() => diagnostics.record('host-unavailable', { reason: 'remote-failure' }))
-      .finally(() => { if (diagnosticsRequest === request) diagnosticsRequest = undefined; });
-    return request.promise;
-  };
-  widget.onDiagnosticsRefresh = refreshDiagnostics;
   const publish = () => {
     if (!alive) return;
-    if (ctx.connection.state.getSnapshot() !== 'connected') diagnosticsRequest?.abort.abort();
     const projection = getProjection();
     widget.update(aggregate.update({
       ...projection,
@@ -122,36 +105,23 @@ export function connectWhaleState(ctx, widget, getProjection, observeEvents = ob
   let stopEvents = () => {};
   try {
     stopEvents = observeEvents(ctx, {
-      diagnostics,
       onReset(baseline) { if (alive) {
-        if (baseline?.reason === 'generation' || baseline?.reason === 'disconnected') diagnosticsRequest?.abort.abort();
-        aggregate.reset(baseline?.identities, baseline?.type === 'baseline' ? 'baseline' : baseline?.reason);
+        aggregate.reset(baseline?.identities);
         publish();
       } },
-      onHealth(ready) {
-        if (!alive) return;
-        if (widget.host) widget.host.dataset.completionFeed = ready ? 'ready' : 'unavailable';
-        widget.setCompletionFeed?.(ready);
-      },
       onBoundary(event) {
         if (!alive) return;
         publish();
         widget.update(aggregate.boundary(event));
       },
     });
-  } catch {
-    if (widget.host) widget.host.dataset.completionFeed = 'unavailable';
-    widget.setCompletionFeed?.(false);
-    console.warn('[whale-pet] Completion feed unavailable; global work and waiting remain observable.');
-  }
+  } catch { /* Root work and waiting remain observable without a completion stream. */ }
   return {
     publish,
     dispose() {
       if (!alive) return;
       alive = false;
-      diagnosticsRequest?.abort.abort();
-      if (widget.onDiagnosticsRefresh === refreshDiagnostics) widget.onDiagnosticsRefresh = undefined;
-      try { stopEvents(); } finally { stopConnection(); aggregate.reset([], 'dispose'); }
+      try { stopEvents(); } finally { stopConnection(); aggregate.reset(); }
     },
   };
 }
@@ -205,7 +175,6 @@ export function createPlugin(require, assets, css, fonts) {
       class Boundary extends React.Component {
         constructor(props) { super(props); this.state = { failed: false }; }
         static getDerivedStateFromError() { return { failed: true }; }
-        componentDidCatch() { console.warn('[whale-pet] Unsupported client state; resting mode enabled.'); }
         render() { return this.state.failed ? h(QuietPet) : this.props.children; }
       }
       function PetRoot(props) {

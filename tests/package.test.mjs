@@ -18,9 +18,9 @@ test('package is a self-contained DSH bundle with only its own inserted row', ()
   for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack', 'postpack']) {
     assert.equal(manifest.scripts[hook], undefined);
   }
-  assert.equal(manifest.version, '0.2.8-beta.3');
-  assert.ok(read('src/version.js').includes(`WHALE_VERSION = '${manifest.version}'`));
-  assert.equal(read('lib/version.js'), read('src/version.js'));
+  assert.equal(manifest.version, '0.2.8');
+  assert.equal(fs.existsSync(path.join(root, 'lib/version.js')), false);
+  assert.equal(manifest.files.includes('DIAGNOSTICS.md'), false);
   assert.deepEqual(manifest.repository, { type: 'git', url: 'git+https://github.com/Yifffan/dsh-plugin-whale-pet.git' });
   assert.equal(manifest.homepage, 'https://github.com/Yifffan/dsh-plugin-whale-pet');
   assert.equal(manifest.bugs.url, `${manifest.homepage}/issues`);
@@ -31,6 +31,15 @@ test('package is a self-contained DSH bundle with only its own inserted row', ()
   assert.equal(manifest.scripts['test:browser'], undefined);
   assert.ok(manifest.files.includes('UPGRADE.md'));
   assert.doesNotMatch(read('tools/bridge-build.mjs'), /WHALE_BRIDGE_DEPS|\/Users\/|dsh-pet-research/);
+});
+test('formal runtime has no diagnostic feature or prerelease helper', () => {
+  for (const file of ['src/widget.js', 'src/adapter.js', 'src/bridge-client.js', 'src/host-bridge.js', 'src/global-state.js', 'lib/client.js', 'lib/index.js', 'lib/remote.js', 'lib/typert.host.js']) {
+    assert.doesNotMatch(read(file), /WhaleDiagnostics|refreshHostDiagnostics|WHALE_DIAGNOSTICS|onDiagnosticsRefresh|diagnostics-toggle|namespaceFailures/);
+  }
+  assert.equal(fs.existsSync(path.join(root, 'src/diagnostics.js')), false);
+  assert.equal(fs.existsSync(path.join(root, 'DIAGNOSTICS.md')), false);
+  assert.ok(manifest.files.includes('CHANGELOG.md'));
+  assert.doesNotMatch(read('README.md'), /Local test build|Local diagnostic build|Install the beta/);
 });
 test('browser output registers one lazy factory using host React and official icons', () => {
   const registrations = [];

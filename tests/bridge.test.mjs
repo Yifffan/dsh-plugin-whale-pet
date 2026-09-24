@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WhaleBoundaryHub, runtimeIdentity } from '../src/host-bridge.js';
 import { observeGlobalEvents } from '../src/bridge-client.js';
-import { WhaleDiagnostics } from '../src/diagnostics.js';
-import { WHALE_FRAME_SCHEMA, TYPERT_REMOTE } from '../lib/remote.js';
+import { WHALE_FRAME_SCHEMA, WHALE_WATCH_DESCRIPTOR, TYPERT_REMOTE } from '../lib/remote.js';
+import * as remoteContract from '../lib/remote.js';
 import { TYPERT } from '../lib/typert.host.js';
 import { withNamespaceInjection } from './namespace-context.mjs';
 const event = (seq,type='turn/end',kind='completed') => ({ seq,type,time:seq,data:{reason:{kind,message:'PRIVATE'},content:'PRIVATE'} });
@@ -18,7 +18,11 @@ function fakeContext(hub) {
 }
 
 test('strict Host and Client descriptors agree and output schemas reject extra properties',()=>{
- assert.equal(TYPERT.invocations[0],TYPERT_REMOTE.descriptors[0]);
+ assert.deepEqual(Object.keys(remoteContract).sort(),['TYPERT_REMOTE','WHALE_FRAME_SCHEMA','WHALE_WATCH_DESCRIPTOR']);
+ assert.deepEqual(TYPERT_REMOTE.descriptors,[WHALE_WATCH_DESCRIPTOR]);
+ assert.deepEqual(TYPERT.invocations,[WHALE_WATCH_DESCRIPTOR]);
+ assert.deepEqual(TYPERT.schemas.map(schema=>schema.name),['WhaleBoundaryFrame']);
+ assert.deepEqual(TYPERT.model.services[0].members.map(member=>member.name),['watch']);
  const frame={type:'turn/end',hostEpoch:'e',streamSeq:1,sessionId:'s',seq:2,time:2,reason:'error'};
  assert.deepEqual(WHALE_FRAME_SCHEMA.parse(frame),frame);
  assert.throws(()=>WHALE_FRAME_SCHEMA.parse({...frame,body:'PRIVATE'}));
@@ -110,6 +114,18 @@ test('fresh traced Remote wrappers share their stable Context root mount',async(
  assert.equal(ctx.counts().mounts,1);a();b();await settle();assert.equal(ctx.counts().unmounts,1);hub.dispose();
 });
 
+test('namespace injection happens only after local mount resolves and watch uses the child service',async t=>{
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);let finishMount,mounted=false,injections=0;
+  ctx.remote.$mount=()=>new Promise(resolve=>{finishMount=()=>{mounted=true;resolve(async()=>{})}});
+  const inject=ctx.inject;
+  ctx.inject=(keys,callback)=>{assert.equal(mounted,true);injections++;return inject(keys,callback)};
+  ctx.namespace.watch=function(signal){assert.equal(this,ctx.namespace);return hub.watch(signal)};
+  const stop=observeGlobalEvents(ctx);t.after(()=>{stop();hub.dispose()});await settle();
+  assert.equal(injections,0);assert.equal(ctx.namespaceChildren(),0);assert.equal(hub.clients.size,0);
+  finishMount();await settle();assert.equal(injections,1);assert.equal(hub.clients.size,1);
+  assert.throws(()=>ctx.remote.whalePet,/without inject/);
+});
+
 test('cleanup before async mount resolves releases it without starting stream or late callback',async()=>{
  const hub=new WhaleBoundaryHub({epoch:'e'});const ctx=fakeContext(hub);let finishMount;let unmounted=0;let callbacks=0;
  ctx.remote.$mount=()=>new Promise(resolve=>{finishMount=()=>resolve(async()=>{unmounted++})});
@@ -133,25 +149,27 @@ const flush = async () => { for (let i=0;i<80;i++) await Promise.resolve(); };
 
 test('namespace injection is required, never bypassed by a plain Remote mock',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[];
   assert.throws(()=>ctx.remote.whalePet,/without inject/);
   delete ctx.inject;
-  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
-  assert.equal(hub.clients.size,0);assert.equal(diagnostics.snapshot().counts.watchAttempts,0);
-  assert.equal(diagnostics.snapshot().counts.watchFailures,0);assert.equal(diagnostics.snapshot().counts.namespaceFailures,1);
+  const stop=observeGlobalEvents(ctx,{onHealth:v=>health.push(v),onReset:v=>resets.push(v)});t.after(()=>{stop();hub.dispose()});await flush();
+  assert.equal(hub.clients.size,0);assert.equal(ctx.namespaceChildren(),0);
+  assert.deepEqual(health,[false]);assert.equal(resets.at(-1).reason,'stream-ended');
+  assert.deepEqual(ctx.counts(),{mounts:1,unmounts:0});
 });
 
-test('pending namespace is bounded, categorised separately, and recovers without remount',async t=>{
+test('pending namespace is bounded, releases its child, and recovers without remount',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[];
   ctx.setNamespaceAvailable(false);
-  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
+  const stop=observeGlobalEvents(ctx,{onHealth:v=>health.push(v),onReset:v=>resets.push(v)});t.after(()=>{stop();hub.dispose()});await flush();
   assert.equal(ctx.namespaceChildren(),1);assert.equal(hub.clients.size,0);
   t.mock.timers.tick(3000);await flush();
-  assert.equal(ctx.namespaceChildren(),0);assert.equal(diagnostics.snapshot().counts.namespaceFailures,1);
-  assert.equal(diagnostics.snapshot().counts.watchAttempts,0);assert.equal(diagnostics.snapshot().counts.watchFailures,0);
+  assert.equal(ctx.namespaceChildren(),0);assert.equal(hub.clients.size,0);
+  assert.deepEqual(health,[false]);assert.equal(resets.at(-1).reason,'stream-ended');
   ctx.setNamespaceAvailable(true);t.mock.timers.tick(1000);await flush();
-  assert.equal(ctx.counts().mounts,1);assert.equal(hub.clients.size,1);assert.equal(diagnostics.snapshot().counts.namespaceReady,1);
+  assert.equal(ctx.counts().mounts,1);assert.equal(hub.clients.size,1);assert.equal(ctx.namespaceChildren(),1);
+  assert.deepEqual(health,[false,true]);assert.equal(resets.at(-1).type,'baseline');
 });
 
 test('pending scope disposal and generation replacement cannot open stale streams',async t=>{
@@ -167,12 +185,14 @@ test('pending scope disposal and generation replacement cannot open stale stream
 
 test('disposing while namespace is pending removes its parked child and readiness timer',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[];
   ctx.setNamespaceAvailable(false);
-  const stop=observeGlobalEvents(ctx,{diagnostics});await flush();assert.equal(ctx.namespaceChildren(),1);
+  const stop=observeGlobalEvents(ctx,{onHealth:v=>health.push(v),onReset:v=>resets.push(v)});await flush();assert.equal(ctx.namespaceChildren(),1);
   stop();await flush();assert.equal(ctx.namespaceChildren(),0);assert.equal(ctx.counts().unmounts,1);
+  const before=resets.length;
   ctx.setNamespaceAvailable(true);t.mock.timers.tick(10000);await flush();
-  assert.equal(hub.clients.size,0);assert.equal(diagnostics.snapshot().counts.watchAttempts,0);hub.dispose();
+  assert.equal(hub.clients.size,0);assert.equal(ctx.namespaceChildren(),0);assert.deepEqual(health,[false]);
+  assert.equal(resets.length,before);assert.equal(ctx.counts().mounts,1);hub.dispose();
 });
 
 test('namespace withdrawal aborts established stream and retry reacquires child capability',async t=>{
@@ -186,15 +206,15 @@ test('namespace withdrawal aborts established stream and retry reacquires child 
 });
 test('failed LOCAL mount retries in same observer and overlapping retries coalesce',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[];
   let mounts=0,unmounts=0;
   ctx.remote.$mount=async()=>{if(++mounts===1)throw Error('PRIVATE');return async()=>{unmounts++}};
-  const a=observeGlobalEvents(ctx,{diagnostics}),b=observeGlobalEvents(ctx);
+  const a=observeGlobalEvents(ctx,{onHealth:v=>health.push(v),onReset:v=>resets.push(v)}),b=observeGlobalEvents(ctx);
   t.after(()=>{a();b();hub.dispose()});await flush();
   assert.equal(mounts,1);assert.equal(hub.clients.size,0);
   t.mock.timers.tick(1000);await flush();
   assert.equal(mounts,2);assert.equal(hub.clients.size,2);
-  assert.equal(diagnostics.snapshot().counts.mountAttempts,2);assert.equal(diagnostics.snapshot().counts.mountFailures,1);
+  assert.deepEqual(health,[false,true]);assert.equal(resets.at(-1).type,'baseline');
   a();await flush();assert.equal(unmounts,0);
   b();await flush();assert.equal(unmounts,1);
 });
@@ -211,12 +231,13 @@ test('reconnect reacquires failed local lease without waiting for scheduled retr
 
 test('ordinary watch dispatch failure retries watch but never remounts',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();let watches=0;
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[];let watches=0;
   ctx.namespace.watch=signal=>{if(++watches===1)throw Error('PRIVATE');return hub.watch(signal)};
-  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
+  const stop=observeGlobalEvents(ctx,{onHealth:v=>health.push(v),onReset:v=>resets.push(v)});t.after(()=>{stop();hub.dispose()});await flush();
   t.mock.timers.tick(1000);await flush();
   assert.equal(watches,2);assert.equal(ctx.counts().mounts,1);
-  assert.equal(diagnostics.snapshot().counts.watchFailures,1);assert.equal(diagnostics.snapshot().counts.mountFailures,0);
+  assert.deepEqual(health,[false,true]);assert.equal(hub.clients.size,1);
+  assert.equal(resets.filter(value=>value.reason==='stream-ended').length,1);
 });
 
 test('new mount waits for prior namespace unmount to finish',async t=>{
@@ -258,25 +279,31 @@ test('disposing after failed mount cancels recovery; reconnect cannot resurrect 
 });
 
 test('baseline-only feed ready never fabricates a received boundary',async t=>{
-  const hub=new WhaleBoundaryHub({epoch:'PRIVATE'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
-  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
-  const snapshot=diagnostics.snapshot();assert.equal(snapshot.ready,true);assert.equal(snapshot.counts.baselines,1);
-  assert.equal(snapshot.counts.starts,0);assert.equal(snapshot.counts.ends,0);assert.equal(snapshot.counts.completed,0);
-  assert.equal(diagnostics.text().includes('PRIVATE'),false);
-  ctx.connection.state.set('disconnected');assert.equal(diagnostics.snapshot().ready,false);
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[],seen=[];
+  const stop=observeGlobalEvents(ctx,{onBoundary:v=>seen.push(v),onHealth:v=>health.push(v),onReset:v=>resets.push(v)});
+  t.after(()=>{stop();hub.dispose()});await flush();
+  assert.deepEqual(health,[false,true]);assert.equal(resets.filter(value=>value.type==='baseline').length,1);
+  assert.deepEqual(seen,[]);
+  ctx.connection.state.set('disconnected');await flush();assert.equal(health.at(-1),false);
+  assert.equal(hub.clients.size,0);assert.deepEqual(seen,[]);
 });
 
-test('parser, order and duplicate frame categories remain distinct',async t=>{
+test('malformed and gapped frames close streams; duplicates are ignored without losing healthy watch',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
-  for(const [kind,frame]of [
-    ['parserFailures',{type:'turn/end',body:'PRIVATE'}],
-    ['orderFailures',{type:'turn/end',hostEpoch:'e',streamSeq:3,sessionId:'PRIVATE',seq:1,time:1,reason:'completed'}],
-    ['duplicates',{type:'turn/end',hostEpoch:'e',streamSeq:0,sessionId:'PRIVATE',seq:1,time:1,reason:'completed'}],
+  for(const [duplicate,frame]of [
+    [false,{type:'turn/end',body:'PRIVATE'}],
+    [false,{type:'turn/end',hostEpoch:'e',streamSeq:3,sessionId:'a',seq:1,time:1,reason:'completed'}],
+    [true,{type:'turn/end',hostEpoch:'e',streamSeq:0,sessionId:'a',seq:1,time:1,reason:'completed'}],
   ]){
-    const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
-    const stop=observeGlobalEvents(ctx,{diagnostics});await flush();for(const client of hub.clients)client.push(frame);await flush();
-    const s=diagnostics.snapshot();assert.equal(s.counts[kind],1);assert.equal(s.counts.ends,0);assert.equal(s.counts.watchFailures,0);
-    assert.equal(s.counts.receivedEnds,kind==='parserFailures'?0:1);assert.equal(s.counts.receivedCompleted,kind==='parserFailures'?0:1);
-    assert.equal(diagnostics.text().includes('PRIVATE'),false);stop();hub.dispose();await flush();
+    const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[],resets=[],seen=[];
+    const stop=observeGlobalEvents(ctx,{onBoundary:v=>seen.push(v),onHealth:v=>health.push(v),onReset:v=>resets.push(v)});
+    await flush();for(const client of hub.clients)client.push(frame);await flush();
+    assert.deepEqual(seen,[]);assert.equal(health.at(-1),duplicate);
+    assert.equal(hub.clients.size,duplicate?1:0);assert.equal(ctx.namespaceChildren(),duplicate?1:0);
+    if(duplicate){
+      hub.accept({id:'a'},event(1,'turn/start'));await flush();assert.equal(seen.length,1);assert.equal(seen[0].type,'turn/start');
+    }else assert.equal(resets.at(-1).reason,'stream-ended');
+    assert(!JSON.stringify({seen,resets}).includes('PRIVATE'));
+    stop();hub.dispose();await flush();
   }
 });
