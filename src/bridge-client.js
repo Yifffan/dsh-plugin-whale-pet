@@ -49,6 +49,41 @@ function acquireWhaleRemote(ctx, remote, diagnostics) {
   };
 }
 
+// A mounted namespace is a separate Cordis capability. Inject it in a child
+// AFTER mounting; requiring it in the mount owner would prevent that owner loading.
+function acquireWhaleNamespace(ctx, abort) {
+  return new Promise((resolve, reject) => {
+    let fiber, disposed = false, closing;
+    const dispose = () => {
+      if (disposed) return closing;
+      disposed = true;
+      abort.signal.removeEventListener('abort', cancelled);
+      closing = Promise.resolve(fiber?.dispose());
+      return closing;
+    };
+    const cancelled = () => {
+      reject(new Error('Whale namespace unavailable'));
+      Promise.resolve(dispose()).catch(() => {});
+    };
+    if (abort.signal.aborted) { cancelled(); return; }
+    abort.signal.addEventListener('abort', cancelled, { once: true });
+    try {
+      fiber = ctx.inject(['remote.whalePet'], scope => {
+        if (disposed || abort.signal.aborted) return;
+        // Dependency withdrawal cancels both an established stream and a unary read.
+        scope.effect(() => () => abort.abort(), 'whale-pet.namespace');
+        resolve({ service: scope.remote.whalePet, dispose });
+      });
+      // A synchronously activated child can be cancelled before inject returns.
+      if (disposed) Promise.resolve(fiber.dispose()).catch(() => {});
+      Promise.resolve(fiber).catch(error => { reject(error); Promise.resolve(dispose()).catch(() => {}); });
+    } catch (error) {
+      reject(error);
+      Promise.resolve(dispose()).catch(() => {});
+    }
+  });
+}
+
 /**
  * Observe live global boundaries. Returns synchronous, idempotent cleanup.
  * onBoundary({sessionId,id,seq,type,reason?,time,hostEpoch,streamSeq,isSubagent?})
@@ -108,9 +143,17 @@ export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth, diagno
         }
         await lease.ready;
         if (!active()) return;
+        phase = 'namespace';
+        record('namespace-attempt');
+        // Missing/withdrawn namespace capability is not a Host watch failure.
+        const waiting = setTimeout(() => current.abort.abort(), 3000);
+        try { current.scope = await acquireWhaleNamespace(ctx, current.abort); }
+        finally { clearTimeout(waiting); }
+        if (!active() || current.abort.signal.aborted) return;
+        record('namespace-ready');
         phase = 'watch';
         record('watch-attempt');
-        current.handle = remote.whalePet.watch(current.abort.signal);
+        current.handle = current.scope.service.watch(current.abort.signal);
         for await (const value of current.handle) {
           if (!active()) return;
           phase = 'parser';
@@ -137,12 +180,13 @@ export function observeGlobalEvents(ctx, { onBoundary, onReset, onHealth, diagno
         }
         if (active()) record('eof');
       } catch {
-        if (active() && phase !== 'mount') record(phase === 'parser' ? 'parser-failure' : phase === 'order' ? 'order-failure' : 'watch-failure');
+        if (active() && phase !== 'mount') record(phase === 'namespace' ? 'namespace-failure' : phase === 'parser' ? 'parser-failure' : phase === 'order' ? 'order-failure' : 'watch-failure');
         // Never forward exception details or raw frames into diagnostics.
       }
       finally {
         current.abort.abort();
         try { await current.handle?.dispose?.(); } catch { /* already closed */ }
+        try { await current.scope?.dispose(); } catch { /* already withdrawn */ }
         if (active()) {
           run = undefined;
           setHealth(false);
@@ -184,18 +228,23 @@ export async function refreshHostDiagnostics(ctx, diagnostics, { signal, timeout
   const unavailable = reason => diagnostics.record('host-unavailable', { reason });
   if (signal?.aborted) { unavailable('aborted'); return; }
   if (ctx.connection?.state?.getSnapshot?.() !== 'connected') { unavailable('disconnected'); return; }
-  const service = ctx.remote?.whalePet;
-  if (typeof service?.diagnostics !== 'function') { unavailable('unavailable'); return; }
   const abort = new AbortController();
-  let timer, onAbort;
+  let timer, onAbort, onScopeAbort, scope;
   try {
     const interrupted = new Promise(resolve => {
-      onAbort = () => { abort.abort(); resolve({ unavailable: 'aborted' }); };
+      let reason = 'unavailable';
+      onScopeAbort = () => resolve({ unavailable: reason });
+      abort.signal.addEventListener('abort', onScopeAbort, { once: true });
+      onAbort = () => { reason = 'aborted'; abort.abort(); };
       signal?.addEventListener('abort', onAbort, { once: true });
-      timer = setTimeout(() => { abort.abort(); resolve({ unavailable: 'timeout' }); }, Math.max(1, Math.min(10000, timeoutMs)));
+      timer = setTimeout(() => { reason = 'timeout'; abort.abort(); }, Math.max(1, Math.min(10000, timeoutMs)));
     });
     // Promise.race observes late rejection even if a broken carrier ignores abort.
-    const request = Promise.resolve().then(() => service.diagnostics(abort.signal));
+    const request = acquireWhaleNamespace(ctx, abort).then(acquired => {
+      scope = acquired;
+      if (abort.signal.aborted || typeof scope.service?.diagnostics !== 'function') return { unavailable: 'unavailable' };
+      return scope.service.diagnostics(abort.signal);
+    });
     const result = await Promise.race([request, interrupted]);
     if (result?.unavailable) { unavailable(result.unavailable); return; }
     if (signal?.aborted) { unavailable('aborted'); return; }
@@ -207,6 +256,8 @@ export async function refreshHostDiagnostics(ctx, diagnostics, { signal, timeout
   finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', onAbort);
+    abort.signal.removeEventListener('abort', onScopeAbort);
     abort.abort();
+    try { await scope?.dispose(); } catch { /* already withdrawn */ }
   }
 }

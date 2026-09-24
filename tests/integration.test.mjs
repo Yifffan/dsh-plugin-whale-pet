@@ -4,6 +4,7 @@ import { connectWhaleState } from '../src/adapter.js';
 import { PetStateMachine } from '../src/state.js';
 import { WhaleDiagnostics } from '../src/diagnostics.js';
 import { WHALE_VERSION } from '../src/version.js';
+import { withNamespaceInjection } from './namespace-context.mjs';
 function wire() {
   let connection = 'connected', handlers, disposed = 0;
   const listeners = new Set();
@@ -82,6 +83,7 @@ const flush = async () => { for(let i=0;i<100;i++)await Promise.resolve(); };
 test('user diagnostics refresh is on-demand, coalesced, aborted and cleaned up on disposal',async()=>{
   const f=wire();let calls=0,signal,resolve;
   f.ctx.remote={whalePet:{diagnostics(s){calls++;signal=s;return new Promise(r=>{resolve=r})}}};
+  withNamespaceInjection(f.ctx);
   assert(f.widget.diagnostics instanceof WhaleDiagnostics);assert.equal(f.handlers.diagnostics,f.widget.diagnostics);
   assert.equal(calls,0);const refresh=f.widget.onDiagnosticsRefresh;
   const a=refresh(),b=refresh();await flush();assert.equal(calls,1);
@@ -96,6 +98,7 @@ test('user diagnostics refresh is on-demand, coalesced, aborted and cleaned up o
 test('adapter reuses widget collector and disconnect cancels outstanding host snapshot',async()=>{
   const d=new WhaleDiagnostics(),listeners=new Set();let connected=true,signal;
   const ctx={connection:{state:{getSnapshot:()=>connected?'connected':'disconnected',subscribe:fn=>{listeners.add(fn);return()=>listeners.delete(fn)}}},remote:{whalePet:{diagnostics(s){signal=s;return new Promise(()=>{})}}}};
+  withNamespaceInjection(ctx);
   const widget={diagnostics:d,preferences:{scope:'global'},update(){}};
   const control=connectWhaleState(ctx,widget,()=>({catalog:{phase:'ready',byId:{}},statuses:new Map()}),()=>()=>{});
   assert.equal(widget.diagnostics,d);const pending=widget.onDiagnosticsRefresh();await flush();
@@ -111,6 +114,7 @@ test('clean EOF clears just-published notice while preserving diagnostic transit
   const ctx={root:{},connection:{state},remote:{$mount:async()=>async()=>{},whalePet:{async *watch(){
     yield {type:'baseline',hostEpoch:'PRIVATE',streamSeq:0,identities:[]};yield frame('turn/start',1);yield frame('turn/end',2);
   }}}};
+  withNamespaceInjection(ctx);
   const control=connectWhaleState(ctx,widget,()=>({catalog:{phase:'ready',byId:{PRIVATE:{running:false}}},statuses:new Map([['PRIVATE',{running:false}]])}));
   t.after(()=>control.dispose());await flush();
   assert(poses.includes('celebrate'));assert.equal(poses.at(-1),'resting');

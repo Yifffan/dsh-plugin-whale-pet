@@ -5,6 +5,7 @@ import { observeGlobalEvents } from '../src/bridge-client.js';
 import { WhaleDiagnostics } from '../src/diagnostics.js';
 import { WHALE_FRAME_SCHEMA, TYPERT_REMOTE } from '../lib/remote.js';
 import { TYPERT } from '../lib/typert.host.js';
+import { withNamespaceInjection } from './namespace-context.mjs';
 const event = (seq,type='turn/end',kind='completed') => ({ seq,type,time:seq,data:{reason:{kind,message:'PRIVATE'},content:'PRIVATE'} });
 const settle = async () => { for(let i=0;i<16;i++) await Promise.resolve(); };
 function stateStore(value) {
@@ -13,7 +14,7 @@ function stateStore(value) {
 function fakeContext(hub) {
  let mounts=0,unmounts=0;
  const remote={$mount:async contribution=>{assert.equal(contribution,TYPERT_REMOTE);mounts++;return async()=>{unmounts++}},whalePet:{watch:signal=>hub.watch(signal)}};
- return {remote,connection:{state:stateStore('connected'),generation:stateStore({id:1})},counts:()=>({mounts,unmounts})};
+ return withNamespaceInjection({remote,connection:{state:stateStore('connected'),generation:stateStore({id:1})},counts:()=>({mounts,unmounts})});
 }
 
 test('strict Host and Client descriptors agree and output schemas reject extra properties',()=>{
@@ -104,7 +105,7 @@ test('overlapping observer mounts share one strict Remote contribution',async()=
 
 test('fresh traced Remote wrappers share their stable Context root mount',async()=>{
  const hub=new WhaleBoundaryHub({epoch:'e'});const ctx=fakeContext(hub);const base=ctx.remote;
- ctx.root={};Object.defineProperty(ctx,'remote',{get:()=>({...base})});
+ ctx.root={};Object.defineProperty(ctx,'remote',{get:()=>Object.defineProperties({},Object.getOwnPropertyDescriptors(base))});
  const a=observeGlobalEvents(ctx),b=observeGlobalEvents(ctx);await settle();
  assert.equal(ctx.counts().mounts,1);a();b();await settle();assert.equal(ctx.counts().unmounts,1);hub.dispose();
 });
@@ -129,6 +130,60 @@ test('absence of Remote is a completion-stream failure, not a fabricated task st
 });
 
 const flush = async () => { for (let i=0;i<80;i++) await Promise.resolve(); };
+
+test('namespace injection is required, never bypassed by a plain Remote mock',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  assert.throws(()=>ctx.remote.whalePet,/without inject/);
+  delete ctx.inject;
+  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
+  assert.equal(hub.clients.size,0);assert.equal(diagnostics.snapshot().counts.watchAttempts,0);
+  assert.equal(diagnostics.snapshot().counts.watchFailures,0);assert.equal(diagnostics.snapshot().counts.namespaceFailures,1);
+});
+
+test('pending namespace is bounded, categorised separately, and recovers without remount',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  ctx.setNamespaceAvailable(false);
+  const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
+  assert.equal(ctx.namespaceChildren(),1);assert.equal(hub.clients.size,0);
+  t.mock.timers.tick(3000);await flush();
+  assert.equal(ctx.namespaceChildren(),0);assert.equal(diagnostics.snapshot().counts.namespaceFailures,1);
+  assert.equal(diagnostics.snapshot().counts.watchAttempts,0);assert.equal(diagnostics.snapshot().counts.watchFailures,0);
+  ctx.setNamespaceAvailable(true);t.mock.timers.tick(1000);await flush();
+  assert.equal(ctx.counts().mounts,1);assert.equal(hub.clients.size,1);assert.equal(diagnostics.snapshot().counts.namespaceReady,1);
+});
+
+test('pending scope disposal and generation replacement cannot open stale streams',async t=>{
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub);
+  ctx.setNamespaceAvailable(false);
+  const stop=observeGlobalEvents(ctx);t.after(()=>{stop();hub.dispose()});await flush();
+  ctx.connection.generation.set({id:2});await flush();assert.equal(ctx.namespaceChildren(),1);
+  ctx.setNamespaceAvailable(true);await flush();assert.equal(hub.clients.size,1);
+  ctx.connection.generation.set({id:3});await flush();assert.equal(hub.clients.size,1);assert.equal(ctx.namespaceChildren(),1);
+  stop();await flush();assert.equal(hub.clients.size,0);assert.equal(ctx.namespaceChildren(),0);
+  ctx.setNamespaceAvailable(true);await flush();assert.equal(hub.clients.size,0);
+});
+
+test('disposing while namespace is pending removes its parked child and readiness timer',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
+  ctx.setNamespaceAvailable(false);
+  const stop=observeGlobalEvents(ctx,{diagnostics});await flush();assert.equal(ctx.namespaceChildren(),1);
+  stop();await flush();assert.equal(ctx.namespaceChildren(),0);assert.equal(ctx.counts().unmounts,1);
+  ctx.setNamespaceAvailable(true);t.mock.timers.tick(10000);await flush();
+  assert.equal(hub.clients.size,0);assert.equal(diagnostics.snapshot().counts.watchAttempts,0);hub.dispose();
+});
+
+test('namespace withdrawal aborts established stream and retry reacquires child capability',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),health=[];
+  const stop=observeGlobalEvents(ctx,{onHealth:v=>health.push(v)});t.after(()=>{stop();hub.dispose()});await flush();
+  assert.equal(hub.clients.size,1);ctx.setNamespaceAvailable(false);await flush();
+  assert.equal(hub.clients.size,0);assert.equal(ctx.namespaceChildren(),0);assert.equal(health.at(-1),false);
+  ctx.setNamespaceAvailable(true);t.mock.timers.tick(1000);await flush();
+  assert.equal(hub.clients.size,1);assert.equal(health.at(-1),true);assert.equal(ctx.counts().mounts,1);
+});
 test('failed LOCAL mount retries in same observer and overlapping retries coalesce',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
   const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();
@@ -157,7 +212,7 @@ test('reconnect reacquires failed local lease without waiting for scheduled retr
 test('ordinary watch dispatch failure retries watch but never remounts',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
   const hub=new WhaleBoundaryHub({epoch:'e'}),ctx=fakeContext(hub),diagnostics=new WhaleDiagnostics();let watches=0;
-  ctx.remote.whalePet.watch=signal=>{if(++watches===1)throw Error('PRIVATE');return hub.watch(signal)};
+  ctx.namespace.watch=signal=>{if(++watches===1)throw Error('PRIVATE');return hub.watch(signal)};
   const stop=observeGlobalEvents(ctx,{diagnostics});t.after(()=>{stop();hub.dispose()});await flush();
   t.mock.timers.tick(1000);await flush();
   assert.equal(watches,2);assert.equal(ctx.counts().mounts,1);

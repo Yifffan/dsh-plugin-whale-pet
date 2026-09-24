@@ -7,6 +7,7 @@ import { SessionAggregate } from '../src/global-state.js';
 import { refreshHostDiagnostics } from '../src/bridge-client.js';
 import { WHALE_DIAGNOSTICS_SCHEMA, WHALE_DIAGNOSTICS_DESCRIPTOR, TYPERT_REMOTE } from '../lib/remote.js';
 import { TYPERT } from '../lib/typert.host.js';
+import { withNamespaceInjection } from './namespace-context.mjs';
 
 const flush = async () => { for(let i=0;i<80;i++) await Promise.resolve(); };
 const hostEvent = (seq,type='turn/end',kind='completed') => ({seq,type,time:seq,data:{reason:{kind,message:'PRIVATE'}}});
@@ -106,17 +107,48 @@ test('Host registers read-only diagnostics in existing whalePet service without 
   accept({id:'PRIVATE'},hostEvent(1));assert.equal(service.diagnostics().completed,1);dispose();
 });
 
-const remoteContext = diagnostics => ({connection:{state:{getSnapshot:()=> 'connected'}},remote:{whalePet:{diagnostics}}});
+const remoteContext = diagnostics => withNamespaceInjection({connection:{state:{getSnapshot:()=> 'connected'}},remote:{whalePet:{diagnostics}}});
+
+test('namespace diagnostic categories retain only fixed events and counters',()=>{
+  const d=new WhaleDiagnostics();
+  for(const event of ['namespace-attempt','namespace-ready','namespace-failure'])d.record(event,{reason:'PRIVATE',error:Error('PRIVATE'),sessionId:'PRIVATE'});
+  const s=d.snapshot();assert.equal(s.counts.namespaceAttempts,1);assert.equal(s.counts.namespaceReady,1);assert.equal(s.counts.namespaceFailures,1);
+  assert.equal(s.stage,'namespace-failure');assert(!d.text().includes('PRIVATE'));
+  assert(s.trace.every(item=>Object.keys(item).sort().join(',')==='atMs,event'));
+});
+
+test('refresh waits for an injected namespace without mounting and cleans pending cancellation',async t=>{
+  t.mock.timers.enable({apis:['setTimeout']});
+  const d=new WhaleDiagnostics();let calls=0;
+  const ctx=remoteContext(async()=>{calls++;return {ok:true,value:{version:WHALE_VERSION,starts:0,ends:0,completed:0}}});
+  assert.throws(()=>ctx.remote.whalePet,/without inject/);ctx.setNamespaceAvailable(false);
+  const first=refreshHostDiagnostics(ctx,d);await flush();assert.equal(calls,0);assert.equal(ctx.namespaceChildren(),1);
+  ctx.setNamespaceAvailable(true);await first;assert.equal(calls,1);assert.equal(ctx.namespaceChildren(),0);
+  ctx.setNamespaceAvailable(false);const timeout=refreshHostDiagnostics(ctx,d);await flush();t.mock.timers.tick(3000);await timeout;
+  assert.equal(ctx.namespaceChildren(),0);assert.equal(d.snapshot().host.reason,'timeout');
+  const abort=new AbortController(),pending=refreshHostDiagnostics(ctx,d,{signal:abort.signal});await flush();abort.abort();await pending;
+  assert.equal(ctx.namespaceChildren(),0);assert.equal(d.snapshot().host.reason,'aborted');
+  ctx.setNamespaceAvailable(true);await flush();assert.equal(calls,1);
+});
+
+test('namespace withdrawal cancels a unary request even if carrier ignores abort',async()=>{
+  const d=new WhaleDiagnostics();let signal,resolve;
+  const ctx=remoteContext(s=>{signal=s;return new Promise(done=>{resolve=done})});
+  const pending=refreshHostDiagnostics(ctx,d);await flush();ctx.setNamespaceAvailable(false);await pending;
+  assert(signal.aborted);assert.equal(ctx.namespaceChildren(),0);assert.equal(d.snapshot().host.reason,'unavailable');
+  resolve({ok:true,value:{version:WHALE_VERSION,starts:99,ends:99,completed:99}});await flush();
+  assert.equal(d.snapshot().host.status,'unavailable');
+});
 test('user refresh unwraps RemoteResult, validates fixed DTO and never fabricates unavailable zeros',async()=>{
   const d=new WhaleDiagnostics();assert.deepEqual(d.snapshot().host,{status:'unavailable',reason:'not-requested'});
   let calls=0;const ctx=remoteContext(async signal=>{calls++;assert(signal instanceof AbortSignal);return {ok:true,value:{version:WHALE_VERSION,starts:4,ends:3,completed:2}}});
   await refreshHostDiagnostics(ctx,d);assert.equal(calls,1);assert.deepEqual(d.snapshot().host,{status:'available',version:WHALE_VERSION,starts:4,ends:3,completed:2,sampledAtMs:d.snapshot().host.sampledAtMs});
   assert(Number.isSafeInteger(d.snapshot().host.sampledAtMs));
-  ctx.remote.whalePet.diagnostics=async()=>({ok:false,error:{message:'PRIVATE'}});await refreshHostDiagnostics(ctx,d);
+  ctx.namespace.diagnostics=async()=>({ok:false,error:{message:'PRIVATE'}});await refreshHostDiagnostics(ctx,d);
   assert.deepEqual(d.snapshot().host,{status:'unavailable',reason:'remote-failure'});assert(!d.text().includes('PRIVATE'));
-  ctx.remote.whalePet.diagnostics=async()=>({ok:true,value:{version:WHALE_VERSION,starts:4,ends:3,completed:2,token:'PRIVATE'}});await refreshHostDiagnostics(ctx,d);
+  ctx.namespace.diagnostics=async()=>({ok:true,value:{version:WHALE_VERSION,starts:4,ends:3,completed:2,token:'PRIVATE'}});await refreshHostDiagnostics(ctx,d);
   assert.equal(d.snapshot().host.reason,'invalid');
-  delete ctx.remote.whalePet.diagnostics;await refreshHostDiagnostics(ctx,d);assert.equal(d.snapshot().host.reason,'unavailable');
+  delete ctx.namespace.diagnostics;await refreshHostDiagnostics(ctx,d);assert.equal(d.snapshot().host.reason,'unavailable');
 });
 
 test('diagnostics refresh timeout and abort finish even when transport ignores cancellation',async t=>{

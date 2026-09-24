@@ -6,8 +6,8 @@ const whaleDiagnosticLimit = 64;
 const whaleDiagnosticMaximum = 1000000;
 const whaleDiagnosticReasons = ['disconnected', 'invalid', 'scope', 'duplicate', 'start', 'candidate', 'reason', 'unobserved', 'subagent', 'expired', 'driver-busy', 'error-priority', 'published', 'unknown'];
 const whaleDiagnosticResets = ['unavailable', 'connecting', 'generation', 'disconnected', 'stream-ended', 'baseline', 'scope-connection', 'dispose', 'unknown'];
-const whaleDiagnosticEvents = ['mount-attempt', 'mount-ready', 'mount-failure', 'watch-attempt', 'watch-failure', 'baseline', 'received-start', 'received-end', 'start', 'end', 'reset', 'aggregate-reset', 'eof', 'parser-failure', 'order-failure', 'duplicate', 'decision', 'aggregate', 'view', 'health', 'host-request', 'host-snapshot', 'host-unavailable', 'disposed'];
-const whaleDiagnosticCounterNames = ['mountAttempts', 'mountFailures', 'watchAttempts', 'watchFailures', 'baselines', 'receivedStarts', 'receivedEnds', 'receivedCompleted', 'starts', 'ends', 'completed', 'resets', 'aggregateResets', 'cleanEof', 'parserFailures', 'orderFailures', 'duplicates', 'hostRequests'];
+const whaleDiagnosticEvents = ['mount-attempt', 'mount-ready', 'mount-failure', 'namespace-attempt', 'namespace-ready', 'namespace-failure', 'watch-attempt', 'watch-failure', 'baseline', 'received-start', 'received-end', 'start', 'end', 'reset', 'aggregate-reset', 'eof', 'parser-failure', 'order-failure', 'duplicate', 'decision', 'aggregate', 'view', 'health', 'host-request', 'host-snapshot', 'host-unavailable', 'disposed'];
+const whaleDiagnosticCounterNames = ['mountAttempts', 'mountFailures', 'namespaceAttempts', 'namespaceReady', 'namespaceFailures', 'watchAttempts', 'watchFailures', 'baselines', 'receivedStarts', 'receivedEnds', 'receivedCompleted', 'starts', 'ends', 'completed', 'resets', 'aggregateResets', 'cleanEof', 'parserFailures', 'orderFailures', 'duplicates', 'hostRequests'];
 const whaleDiagnosticEnum = (value, values) => values.includes(value) ? value : 'unknown';
 const whaleDiagnosticNumber = value => typeof value === 'number' && Number.isFinite(value) ? Math.min(whaleDiagnosticMaximum, Math.max(0, Math.floor(value))) : 0;
 const whaleDiagnosticGet = (object, key) => {
@@ -32,9 +32,9 @@ export class WhaleDiagnostics {
     const get = key => whaleDiagnosticGet(details, key);
     const item = { atMs: this.#elapsed(), event };
     const increment = key => { this.#counts[key] = Math.min(whaleDiagnosticMaximum, this.#counts[key] + 1); };
-    const counter = { 'mount-attempt': 'mountAttempts', 'mount-failure': 'mountFailures', 'watch-attempt': 'watchAttempts', 'watch-failure': 'watchFailures', baseline: 'baselines', 'received-start': 'receivedStarts', 'received-end': 'receivedEnds', start: 'starts', end: 'ends', reset: 'resets', 'aggregate-reset': 'aggregateResets', eof: 'cleanEof', 'parser-failure': 'parserFailures', 'order-failure': 'orderFailures', duplicate: 'duplicates', 'host-request': 'hostRequests' }[event];
+    const counter = { 'mount-attempt': 'mountAttempts', 'mount-failure': 'mountFailures', 'namespace-attempt': 'namespaceAttempts', 'namespace-ready': 'namespaceReady', 'namespace-failure': 'namespaceFailures', 'watch-attempt': 'watchAttempts', 'watch-failure': 'watchFailures', baseline: 'baselines', 'received-start': 'receivedStarts', 'received-end': 'receivedEnds', start: 'starts', end: 'ends', reset: 'resets', 'aggregate-reset': 'aggregateResets', eof: 'cleanEof', 'parser-failure': 'parserFailures', 'order-failure': 'orderFailures', duplicate: 'duplicates', 'host-request': 'hostRequests' }[event];
     if (counter) increment(counter);
-    if (['mount-attempt', 'mount-ready', 'mount-failure', 'watch-attempt', 'watch-failure', 'baseline', 'start', 'end', 'eof', 'parser-failure', 'order-failure', 'disposed'].includes(event)) this.#stage = event;
+    if (['mount-attempt', 'mount-ready', 'mount-failure', 'namespace-attempt', 'namespace-ready', 'namespace-failure', 'watch-attempt', 'watch-failure', 'baseline', 'start', 'end', 'eof', 'parser-failure', 'order-failure', 'disposed'].includes(event)) this.#stage = event;
     if (event === 'end' || event === 'received-end') {
       item.reason = whaleDiagnosticEnum(get('reason'), ['completed', 'error', 'aborted', 'cancelled', 'interrupted', 'blocked', 'max-tokens', 'unknown']);
       if (item.reason === 'completed') increment(event === 'end' ? 'completed' : 'receivedCompleted');

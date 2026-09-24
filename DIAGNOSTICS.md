@@ -1,12 +1,12 @@
-# Completion synchronization diagnostics — local beta.2
+# Completion synchronization diagnostics — local beta.3
 
-This build is `0.2.8-beta.2`, a **local diagnostic prerelease**, not an npm release. It fixes a reproduced local Remote-registration retry defect and adds inspection tools. It does **not** establish that the installed missing-celebration issue is solved.
+This build is `0.2.8-beta.3`, a **local test prerelease**, not an npm release. It fixes a missing dependency declaration for the custom `remote.whalePet` namespace. With beta.2, local method registration succeeded but actual calls could fail before reaching the Host. The corrected calls run in a lifecycle-owned injected child context after registration; this avoids both undeclared access and a startup dependency cycle. The existing diagnostic menu and mount-retry corrections are retained. Actual installed behavior still needs verification.
 
 ## 中文：如何提供诊断
 
-1. 等当前任务结束，再在 DSH 插件安装入口安装提供的 `dsh-plugin-whale-pet-0.2.8-beta.2.tgz` 本地包。不要卸载旧版或手工改配置。条目 ID 仍为 `whale-pet`。
+1. 等当前任务结束，再在 DSH 插件安装入口安装提供的 `dsh-plugin-whale-pet-0.2.8-beta.3.tgz` 本地包。不要卸载旧版或手工改配置。条目 ID 仍为 `whale-pet`。
 2. 安装后，如需重新加载 Host 模块，完整退出并重新打开 DSH；先保存工作并确认没有运行任务。插件不会自行重启、刷新或修改你的 profile。
-3. **右键小鲸鱼 → 同步诊断**。先看 JSON 顶部版本是否为 `0.2.8-beta.2`，点击“复制诊断”保留一份回复前记录。复制失败时，文本会被选中，可按 **⌘C / Ctrl+C**。
+3. **右键小鲸鱼 → 同步诊断**。先看 JSON 顶部版本是否为 `0.2.8-beta.3`，点击“复制诊断”保留一份回复前记录。复制失败时，文本会被选中，可按 **⌘C / Ctrl+C**。
 4. 正常发一条消息，等助手完整回复结束；无需使用秘密信息、特殊测试提示词或额外调用模型的诊断工具。
 5. 再打开“同步诊断”并复制回复后的记录，同时说明是否看到庆祝。把前后两份记录发回来即可；若只方便提供一份，先提供回复后的记录。
 
@@ -41,4 +41,5 @@ Opening/refreshing/copying diagnostics can make one bounded read-only request fo
 - The existing no-history-replay, overflow reset, main-session filtering and success/error classification policies remain in place. Cancellation, blocking and token limits are not converted to successful celebrations.
 - The known retry correction matters only if local registration actually failed; it must not be generalized to every transport failure.
 - Isolation tests and the offline menu preview do not prove that the actual running Host is supplying completion events. The requested before/after captures are the next evidence needed.
-- If the report shows beta.1 or the menu lacks Sync diagnostics, the loaded client is not this build. If the client is beta.2 but Host diagnostics is unavailable, preserve that result rather than assuming zero Host activity.
+- If the report's top-level version is not beta.3, the loaded client is not this build. If the client is beta.3 but Host diagnostics is unavailable, preserve that result rather than assuming zero Host activity.
+- The beta.2 reports with successful local mount, immediate watch failures and zero baselines matched a missing namespace dependency. That case was reproduced using real Cordis/Gateway, not only plain-object Remote mocks. Declaring the namespace on the same outer plugin that creates it would cause a dependency cycle, so the fix uses a child injection scope after registration.

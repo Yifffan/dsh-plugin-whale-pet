@@ -10,9 +10,9 @@ A little companion that lives inside your DeepSeek Harness (DSH) window—there 
 
 一只住在 DSH 窗口里的小鲸鱼。陪你工作、等你决定，也陪你好好打个盹。
 
-> **Local diagnostic build: 0.2.8-beta.2 — not published to npm.** Compatibility target: DSH Desktop 0.1.6-alpha.2. This build adds a privacy-safe **Sync diagnostics** menu and fixes a reproduced local Remote-registration retry defect. It does not establish that the installed missing-celebration issue is solved. See the [diagnostic guide](DIAGNOSTICS.md).
+> **Local test build: 0.2.8-beta.3 — not published to npm.** Compatibility target: DSH Desktop 0.1.6-alpha.2. This build fixes missing `remote.whalePet` dependency injection when calling the custom completion stream and diagnostic RPC, and retains the privacy-safe **Sync diagnostics** menu. The dependency failure was reproduced with real DSH Gateway/Cordis; the updated installed behavior still needs user verification. See the [diagnostic guide](DIAGNOSTICS.md).
 
-Install this diagnostic build using the provided `dsh-plugin-whale-pet-0.2.8-beta.2.tgz` local package after current tasks finish. The npm/GitHub installation links below still refer to the previously published beta.1, not this local diagnostic build.
+Install this test build using the provided `dsh-plugin-whale-pet-0.2.8-beta.3.tgz` local package after current tasks finish. The npm/GitHub installation links below still refer to the previously published beta.1, not this local test build.
 
 ## Features
 
