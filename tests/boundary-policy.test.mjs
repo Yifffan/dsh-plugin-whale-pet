@@ -58,7 +58,7 @@ test('Host accepts only deduplicated boundaries without reading or retaining pri
 test('Host registers only the read-only watch capability and disposal closes its readers',async()=>{
   let service,accept,dispose;
   apply({get:()=>undefined,provide(name,value){assert.equal(name,'whalePet');service=value},on(name,fn,options){assert.equal(name,'session/event');assert.deepEqual(options,{global:true});accept=fn},effect(fn){dispose=fn()}});
-  assert.deepEqual(Object.keys(service).sort(),['typertRemote','watch']);
+  assert.deepEqual(Object.keys(service).sort(),['balance','typertRemote','watch']);
   assert.equal(service.typertRemote.namespace,'whalePet');assert.equal(service.typertRemote.service,service);
   const reader=service.watch();assert.equal((await reader.next()).value.type,'baseline');
   accept({id:'a'},hostEvent(1));assert.equal((await reader.next()).value.reason,'completed');

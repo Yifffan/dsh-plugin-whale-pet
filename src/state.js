@@ -18,7 +18,7 @@ function nextVariantIndex(size, previous, random) {
   const pick = Math.min(count - 1, Math.max(0, Math.floor(random() * count) || 0));
   return previous >= 0 && pick >= previous ? pick + 1 : pick;
 }
-export const DEFAULTS = Object.freeze({ scale: 1, hidden: false, motion: true, scope: 'global', sleepAfterMs: 120000, x: null, y: null });
+export const DEFAULTS = Object.freeze({ scale: 1, hidden: false, motion: true, balance: false, scope: 'global', sleepAfterMs: 120000, x: null, y: null });
 export const STORAGE_KEY = 'dsh-plugin-whale-pet:v1';
 
 export function cleanPreferences(value) {
@@ -28,6 +28,7 @@ export function cleanPreferences(value) {
     scale: finite(source.scale) ? Math.min(1.6, Math.max(0.65, source.scale)) : 1,
     hidden: source.hidden === true,
     motion: source.motion !== false,
+    balance: source.balance === true,
     scope: source.scope === 'current' ? 'current' : 'global',
     sleepAfterMs: [30000, 120000, 300000].includes(source.sleepAfterMs) ? source.sleepAfterMs : 120000,
     x: finite(source.x) ? source.x : null,
@@ -156,6 +157,9 @@ export class PetStateMachine {
         : state === 'working' ? (WORKING_KEYS[this.workingIndex] || 'state.working') : `state.${state}`,
       greeting: now < this.interactionUntil,
       available: s.available === true,
+      // Payload for the adapter; the bubble only renders it when the user opted in.
+      balance: s.balance,
+      balanceStale: s.balanceStale === true,
     };
   }
 }

@@ -60,7 +60,8 @@ After an update that changes Host or client modules, wait for current tasks to f
 ## Usage
 
 - **Click** the whale to say hello; **drag** it to reposition.
-- **Right-click** to change session scope, size, animation, and nap timing.
+- **Right-click** to change session scope, size, animation, nap timing, and whether the bubble shows your DeepSeek balance.
+- **Balance (off by default)**: when enabled, clicking the whale answers with the account balance read on the Host (`GET /api.deepseek.com/user/balance` through the `DEEPSEEK_API_KEY` credential). A fresh reading is reused for two minutes; an older one is re-read on click, and every finished turn refreshes it. If the key is missing, rejected, or the endpoint is unreachable, the bubble says so instead of showing a stale amount. The key itself never enters the client bundle, a frame, or a log line.
 - Use the restore button to bring back a hidden whale.
 - Global scope covers ordinary main sessions on the currently connected Host—not multiple devices or Hosts.
 - Waiting for user input has higher display priority. Brief completion notices are not queued for later replay.

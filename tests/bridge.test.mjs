@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WhaleBoundaryHub, runtimeIdentity } from '../src/host-bridge.js';
 import { observeGlobalEvents } from '../src/bridge-client.js';
-import { WHALE_FRAME_SCHEMA, WHALE_WATCH_DESCRIPTOR, TYPERT_REMOTE } from '../lib/remote.js';
+import { WHALE_FRAME_SCHEMA, WHALE_WATCH_DESCRIPTOR, WHALE_BALANCE_SCHEMA, WHALE_BALANCE_DESCRIPTOR, TYPERT_REMOTE } from '../lib/remote.js';
 import * as remoteContract from '../lib/remote.js';
 import { TYPERT } from '../lib/typert.host.js';
 import { withNamespaceInjection } from './namespace-context.mjs';
@@ -18,11 +18,11 @@ function fakeContext(hub) {
 }
 
 test('strict Host and Client descriptors agree and output schemas reject extra properties',()=>{
- assert.deepEqual(Object.keys(remoteContract).sort(),['TYPERT_REMOTE','WHALE_FRAME_SCHEMA','WHALE_WATCH_DESCRIPTOR']);
- assert.deepEqual(TYPERT_REMOTE.descriptors,[WHALE_WATCH_DESCRIPTOR]);
- assert.deepEqual(TYPERT.invocations,[WHALE_WATCH_DESCRIPTOR]);
- assert.deepEqual(TYPERT.schemas.map(schema=>schema.name),['WhaleBoundaryFrame']);
- assert.deepEqual(TYPERT.model.services[0].members.map(member=>member.name),['watch']);
+ assert.deepEqual(Object.keys(remoteContract).sort(),['TYPERT_REMOTE','WHALE_BALANCE_DESCRIPTOR','WHALE_BALANCE_SCHEMA','WHALE_FRAME_SCHEMA','WHALE_WATCH_DESCRIPTOR']);
+ assert.deepEqual(TYPERT_REMOTE.descriptors,[WHALE_WATCH_DESCRIPTOR,WHALE_BALANCE_DESCRIPTOR]);
+ assert.deepEqual(TYPERT.invocations,[WHALE_WATCH_DESCRIPTOR,WHALE_BALANCE_DESCRIPTOR]);
+ assert.deepEqual(TYPERT.schemas.map(schema=>schema.name),['WhaleBoundaryFrame','WhaleBalance']);
+ assert.deepEqual(TYPERT.model.services[0].members.map(member=>member.name),['watch','balance']);
  const frame={type:'turn/end',hostEpoch:'e',streamSeq:1,sessionId:'s',seq:2,time:2,reason:'error'};
  assert.deepEqual(WHALE_FRAME_SCHEMA.parse(frame),frame);
  assert.throws(()=>WHALE_FRAME_SCHEMA.parse({...frame,body:'PRIVATE'}));

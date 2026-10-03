@@ -1,5 +1,7 @@
 node_modules/
 .pnpm-store/
+.npm-cache/
+package-lock.json
 artifacts/
 preview/
 *.tgz

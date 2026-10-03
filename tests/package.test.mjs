@@ -63,7 +63,7 @@ test('host contributes only a read-only boundary service and owned listener', as
   const host = await import('../lib/index.js');
   assert.equal(host.name, 'whalePet'); assert.deepEqual(host.inject, ['agents']);
   let service, cleanup;
-  host.apply({ get: () => ({ list: () => [], roots: () => [] }),
+  host.apply({ get: key => key === 'credentials' ? { resolve: async () => ({ value: 'sk-test' }) } : ({ list: () => [], roots: () => [] }),
     provide(key, value) { assert.equal(key, 'whalePet'); service = value; },
     on(event, callback, options) { assert.equal(event, 'session/event'); assert.equal(options.global, true); assert.equal(typeof callback, 'function'); },
     effect(factory) { cleanup = factory(); },
@@ -72,7 +72,11 @@ test('host contributes only a read-only boundary service and owned listener', as
   const stream = service.watch(new AbortController().signal);
   assert.equal((await stream.next()).value.type, 'baseline'); cleanup();
   assert.equal((await stream.next()).done, true);
-  assert.doesNotMatch(read('lib/index.js'), /from ['"](?:node:)?(?:fs|http|https|child_process)|createServer|writeFile|fetch\(/);
+  assert.equal(typeof service.balance, 'function');
+  // No filesystem, process or server capability reaches the Host half, and the
+  // only outbound call is the balance read.
+  assert.doesNotMatch(read('lib/index.js'), /from ['"](?:node:)?(?:fs|http|https|child_process)|createServer|writeFile|require\(|import\(/);
+  assert.equal((read('lib/index.js').match(/fetchImpl\s*=/g) || []).length, 1);
 });
 test('embedded bubble fonts ship with OFL notices and no runtime font dependency', () => {
   let total = 0;

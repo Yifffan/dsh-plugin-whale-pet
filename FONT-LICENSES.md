@@ -8,8 +8,8 @@ The speech bubbles use two free, OFL-licensed fonts that permit commercial use. 
 - Upstream: [ZCOOL KuaiLe project](https://github.com/googlefonts/zcool-kuaile).
 - Copyright: Copyright 2018 The ZCOOL KuaiLe Project Authors.
 - Original license: [OFL-ZCOOL-KuaiLe](<assets/fonts/OFL-ZCOOL-KuaiLe.txt>), copied byte-for-byte from the verified archive.
-- Modifications: subset to retain only the glyphs assigned to the Chinese font that are needed by the current bubble text (`state.*`, `working.*`, `celebrate.*`, `error.*`, and `pet.greeting`), and converted to WOFF2. Menu and settings translations are excluded from the subset. Glyph outlines have not been redrawn. As a modified version, the font has been renamed internally to **Whale Bubble Han**, with the PostScript name `WhaleBubbleHan-Regular` and weight 400.
-- Output: [bubble-zh.woff2](<assets/fonts/bubble-zh.woff2>), 10,888 bytes.
+- Modifications: subset to retain only the glyphs assigned to the Chinese font that are needed by the current bubble text (`state.*`, `working.*`, `celebrate.*`, `error.*`, `pet.greeting`, and the opt-in balance phrases `pet.balance*`), and converted to WOFF2. Menu and settings translations are excluded from the subset. Glyph outlines have not been redrawn. As a modified version, the font has been renamed internally to **Whale Bubble Han**, with the PostScript name `WhaleBubbleHan-Regular` and weight 400.
+- Output: [bubble-zh.woff2](<assets/fonts/bubble-zh.woff2>), 11,624 bytes.
 
 ## English: Fredoka 500
 
@@ -20,7 +20,7 @@ The speech bubbles use two free, OFL-licensed fonts that permit commercial use. 
 - The original package's `fredoka-latin-500-normal.woff2` is used without any changes. Its actual OS/2 weight is 500. Its internal family name is `Fredoka Light Medium`, and its PostScript name is `FredokaLight-Medium`; these names come from the source file and do not indicate that a light weight is being used. The font can be registered at runtime under the independent CSS alias `Whale Bubble Latin`.
 - Output: [bubble-en.woff2](<assets/fonts/bubble-en.woff2>), 16,248 bytes.
 
-Together, the two font files total **27,136 bytes, approximately 26.5 KiB**. Coverage has been verified for every character actually used in the current bubble text. Menus, settings, the restore button, and other UI elements continue to use system UI fonts. Chinese glyphs used only in those elements, as well as `↗`, do not need to be included in the bubble subset, so new menu translations do not increase its size. Adding Chinese **bubble** text requires rebuilding the subset and checking coverage, rather than silently replacing unsupported characters with boxes.
+Together, the two font files total **27,872 bytes, approximately 27.2 KiB**. Coverage has been verified for every character actually used in the current bubble text. Menus, settings, the restore button, and other UI elements continue to use system UI fonts. Chinese glyphs used only in those elements, as well as `↗`, do not need to be included in the bubble subset, so new menu translations do not increase its size. Adding Chinese **bubble** text requires rebuilding the subset and checking coverage, rather than silently replacing unsupported characters with boxes.
 
 ## Commercial Use, Embedding, and Distribution
 
@@ -51,6 +51,6 @@ sha512-s2IhjQ50wDnKkkaKmjhtL0rxQg6ITsVusiipM3m7zUwVZZbbCKsscNDkngwp28xVzfIt7neWr
 
 This repository includes the processed fonts, complete license texts, and output manifest. Normal plugin builds and installation do not require downloading or reprocessing fonts.
 
-The Chinese subset was created using fonttools 4.61.1. The initial public snapshot did not include the development download and subsetting scripts used at the time, so this repository alone is not guaranteed to provide one-step reproduction of the Chinese subset. When adding Chinese bubble text, rebuild the subset from the pinned sources above, retain the OFL notices and modified-font naming requirements, and update the font manifest and glyph coverage tests.
+The Chinese subset was created using fonttools. [tools/font-subset.py](tools/font-subset.py) reproduces it from the pinned source above in one step: it verifies the source SHA-256, keeps only the codepoints already in the manifest plus the balance phrases, strips layout and hinting tables, renames the modified font to the non-reserved name, rewrites the manifest, and refuses to write an output whose cmap does not cover every retained codepoint. When adding Chinese bubble text, add the new codepoints there, rebuild, and let the glyph coverage test in `tests/bubble.test.mjs` confirm the result.
 
 Output filenames, actual family and PostScript names, glyph coverage, weights, sizes, and SHA-256 hashes are recorded in the [font manifest](<assets/fonts/manifest.json>).

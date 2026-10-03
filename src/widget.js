@@ -4,15 +4,37 @@ import { acquireBubbleFonts } from './fonts.js';
 import { bubbleLayout } from './bubble-layout.js';
 import { attachBubbleSurface } from './bubble-surface.js';
 
+/** How long a reading stays fresh enough to show without re-reading first. */
+export const BALANCE_STALE_MS = 120000;
+const CURRENCY_SIGNS = Object.freeze({ CNY: '¥', USD: '$', EUR: '€', JPY: '¥', GBP: '£' });
+
+/**
+ * Format one Host wallet reading for the bubble. Returns undefined for every
+ * absent or malformed shape so the caller falls back to a phrase, never a guess.
+ * @param {{ currency?: string, total?: string }} wallet - Host wallet entry.
+ */
+export function formatBalance(wallet) {
+  const currency = typeof wallet?.currency === 'string' ? wallet.currency : '';
+  const decimal = typeof wallet?.total === 'string' ? wallet.total : '';
+  if (!/^-?\d{1,24}(?:\.\d{1,12})?$/.test(decimal)) return undefined;
+  const sign = decimal.startsWith('-') ? '-' : '';
+  const [whole, fraction] = (sign ? decimal.slice(1) : decimal).split('.');
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const tail = fraction === undefined ? '' : `.${fraction}`;
+  const mark = CURRENCY_SIGNS[currency.toUpperCase()];
+  return mark === undefined ? `${sign}${grouped}${tail} ${currency}`.trim() : `${sign}${mark}${grouped}${tail}`;
+}
+
 /** Framework-independent UI shared by the real plugin and offline preview. */
 export class WhaleWidget {
-  constructor(host, { assets, css, fonts, storage, language = 'en', now = () => Date.now(), onView = () => {}, onScopeChange = () => {} } = {}) {
+  constructor(host, { assets, css, fonts, storage, language = 'en', now = () => Date.now(), onView = () => {}, onScopeChange = () => {}, onBalanceWanted = () => {} } = {}) {
     this.host = host;
     this.language = normalizeLanguage(language);
     this.originalLang = host.getAttribute('lang');
     this.now = now;
     this.onView = onView;
     this.onScopeChange = onScopeChange;
+    this.onBalanceWanted = onBalanceWanted;
     this.assets = assets;
     this.cleanups = [];
     this.disposed = false;
@@ -48,6 +70,7 @@ export class WhaleWidget {
         <div class="setting"><label for="whale-scope" data-i18n="setting.scope"></label><span class="select-control"><select id="whale-scope"><option value="current" data-i18n="setting.scopeCurrent"></option><option value="global" data-i18n="setting.scopeGlobal"></option></select><span class="select-arrow" aria-hidden="true"></span></span></div>
         <div class="setting"><label for="whale-size"><span data-i18n="setting.size"></span> <output class="size-value"></output></label><input id="whale-size" type="range" min="65" max="160" step="5" /></div>
         <div class="setting"><label for="whale-motion" data-i18n="setting.motion"></label><input id="whale-motion" type="checkbox" role="switch" /></div>
+        <div class="setting"><label for="whale-balance" data-i18n="setting.balance"></label><input id="whale-balance" type="checkbox" role="switch" /></div>
         <div class="setting"><label for="whale-sleep" data-i18n="setting.sleep"></label><span class="select-control"><select id="whale-sleep"><option value="30000" data-i18n="setting.seconds30"></option><option value="120000" data-i18n="setting.minutes2"></option><option value="300000" data-i18n="setting.minutes5"></option></select><span class="select-arrow" aria-hidden="true"></span></span></div>
         <div class="panel-actions"><button class="action reset" type="button" data-i18n="action.reset"></button><button class="action hide" type="button" data-i18n="action.hide"></button></div>
       </section>
@@ -67,6 +90,7 @@ export class WhaleWidget {
     this.restore = this.root.querySelector('.restore');
     this.range = this.root.querySelector('#whale-size');
     this.motion = this.root.querySelector('#whale-motion');
+    this.balance = this.root.querySelector('#whale-balance');
     this.sleep = this.root.querySelector('#whale-sleep');
     const fontLease = acquireBubbleFonts(host.ownerDocument, fonts);
     this.fontsReady = fontLease.ready;
@@ -81,7 +105,13 @@ export class WhaleWidget {
     this.listen(this.button, 'click', e => {
       if (this.suppressClick) { this.suppressClick = false; return; }
       if (e.detail === 0) this.openPanel();
-      else { this.machine.touch(this.now()); this.paint(); }
+      else {
+        this.machine.touch(this.now());
+        // A reading older than the freshness window is refreshed on demand, so the
+        // opted-in bubble never shows a figure from an unknown moment.
+        if (this.preferences.balance && this.now() - (this.balanceFrame?.fetchedAt ?? 0) >= BALANCE_STALE_MS) this.onBalanceWanted();
+        this.paint();
+      }
     });
     this.listen(this.button, 'contextmenu', e => { e.preventDefault(); this.openPanel(); });
     this.listen(this.button, 'keydown', e => {
@@ -114,6 +144,9 @@ export class WhaleWidget {
     });
     this.listen(this.motion, 'change', () => {
       this.preferences.motion = this.motion.checked; this.applyPreferences(); this.save();
+    });
+    this.listen(this.balance, 'change', () => {
+      this.preferences.balance = this.balance.checked; this.save(); this.paint();
     });
     this.listen(this.sleep, 'change', () => {
       this.preferences.sleepAfterMs = Number(this.sleep.value);
@@ -161,6 +194,8 @@ export class WhaleWidget {
     target.addEventListener(event, callback, options);
     this.cleanups.push(() => target.removeEventListener(event, callback, options));
   }
+  /** Host balances are read through the bridge, never here; the clock is shared for staleness. */
+  nowMs() { return this.now(); }
   save() { try { this.storage?.setItem(STORAGE_KEY, JSON.stringify(this.preferences)); } catch { /* storage denial does not break the pet */ } }
   visibility() { this.host.dataset.paused = String(document.hidden || this.preferences.hidden); }
   applyPreferences() {
@@ -170,6 +205,7 @@ export class WhaleWidget {
     this.range.style.setProperty('--range-progress', `${(Number(this.range.value) - Number(this.range.min)) / (Number(this.range.max) - Number(this.range.min)) * 100}%`);
     this.scope.value = this.preferences.scope;
     this.motion.checked = this.preferences.motion;
+    this.balance.checked = this.preferences.balance;
     this.sleep.value = String(this.preferences.sleepAfterMs);
     this.machine.sleepAfterMs = this.preferences.sleepAfterMs;
     this.host.dataset.motion = String(this.preferences.motion);
@@ -246,20 +282,44 @@ export class WhaleWidget {
     this.drag = null; delete this.pet.dataset.dragging;
     if (this.button.hasPointerCapture(e.pointerId)) this.button.releasePointerCapture(e.pointerId);
   }
-  update(snapshot) { if (!this.disposed) { this.machine.update(snapshot, this.now()); this.paint(); } }
+  update(snapshot) { if (!this.disposed) {
+    // Session snapshots never carry money; keep the last reading attached so a
+    // routine repaint cannot blank an opted-in bubble.
+    this.machine.update({ ...snapshot, balance: this.balanceText, balanceStale: this.now() - (this.balanceFrame?.fetchedAt ?? 0) >= BALANCE_STALE_MS }, this.now());
+    this.paint();
+  } }
+  /**
+   * Accept one Host balance reading. `available: false` clears the figure so the
+   * bubble shows the failure phrase instead of a number from an earlier read.
+   * @param {{ available?: boolean, wallets?: Array<{currency?: string, total?: string}>, fetchedAt?: number }} frame - Host reading.
+   */
+  setBalance(frame) {
+    if (this.disposed) return;
+    const wallet = frame?.available === true ? frame.wallets?.[0] : undefined;
+    this.balanceFrame = frame;
+    this.balanceText = wallet === undefined ? undefined : formatBalance(wallet);
+    this.machine.snapshot = { ...this.machine.snapshot, balance: this.balanceText, balanceStale: this.now() - (frame?.fetchedAt ?? 0) >= BALANCE_STALE_MS };
+    this.paint();
+  }
   paint() {
     if (this.disposed) return;
     const view = this.machine.view(this.now());
     if (this.pet.dataset.state !== view.state || !this.image.getAttribute('src')) {
       this.pet.dataset.state = view.state; this.image.src = this.assets[view.state];
     }
-    this.pet.dataset.notice = String(Boolean(view.noticeKey || ['waiting', 'celebrate', 'error'].includes(view.state) || view.greeting));
-    this.pet.dataset.touch = String(Boolean(view.greeting && !view.noticeKey && !['waiting', 'working', 'celebrate', 'error'].includes(view.state)));
+    const balanceKey = this.preferences.balance && !view.noticeKey
+      ? (view.balance === undefined ? 'pet.balanceUnavailable' : 'pet.balance')
+      : undefined;
+    this.pet.dataset.notice = String(Boolean(view.noticeKey || balanceKey || ['waiting', 'celebrate', 'error'].includes(view.state) || view.greeting));
+    this.pet.dataset.touch = String(Boolean(view.greeting && !view.noticeKey && !balanceKey && !['waiting', 'working', 'celebrate', 'error'].includes(view.state)));
     const count = view.state === 'working' && Number.isFinite(view.workingCount) ? Math.max(0, Math.floor(view.workingCount)) : 0;
     this.countOverlay.toggleAttribute('hidden', count === 0);
     this.countText.textContent = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
-    const messageKey = view.noticeKey || (view.greeting && view.state === 'resting' ? 'pet.greeting' : view.messageKey);
-    const message = translate(this.language, messageKey);
+    const messageKey = view.noticeKey
+      || (balanceKey !== undefined
+        ? balanceKey
+        : view.greeting && view.state === 'resting' ? 'pet.greeting' : view.messageKey);
+    const message = translate(this.language, messageKey, view.balance === undefined ? {} : { amount: view.balance });
     this.bubbleText.textContent = message;
     this.positionBubble();
     // The decorative screen number is announced once, with its actual count,

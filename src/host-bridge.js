@@ -1,4 +1,5 @@
 // Read-only Host event bridge. No transcript retention or HTTP routes.
+import { createBalanceReader } from './balance.js';
 export const name = 'whalePet';
 export const inject = ['agents'];
 export const BRIDGE_QUEUE_LIMIT = 128;
@@ -100,8 +101,19 @@ export class WhaleBoundaryHub {
 
 export function apply(ctx) {
   const hub = new WhaleBoundaryHub({ agents: ctx.get('agents') });
+  // The credential service is optional: without it the reader reports an
+  // unconfigured key and the bubble shows one phrase instead of a figure.
+  const reader = createBalanceReader({ credentials: ctx.get('credentials') });
   const service = {
     watch(signal) { return hub.watch(signal); },
+    // Every method on this service is a stream contribution, so one reading is
+    // published as a single-frame iterable that ends immediately.
+    balance(signal) {
+      return (async function* one() {
+        if (signal?.aborted === true) return;
+        yield await reader.read();
+      })();
+    },
   };
   // Public Cordis service + the exact visible protocol binding. Strict reflection is
   // contributed separately by ./typert; no SRC discovery or decorator fallback.

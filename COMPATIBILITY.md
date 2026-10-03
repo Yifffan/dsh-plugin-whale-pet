@@ -22,6 +22,7 @@ The user confirmed that normal-reply celebration appeared in the installed app u
 - Root session catalog/status supplies work and waiting state independently of completion delivery.
 - A plugin-owned read-only Host service projects live turn boundaries through the existing authenticated connection.
 - No model calls, approval handling, external listening port, telemetry or runtime font/CDN downloads.
+- The optional balance reading is the only outbound request: one `GET` to the pinned `https://api.deepseek.com/user/balance` endpoint with the `DEEPSEEK_API_KEY` credential resolved per read. Without that credential the Host reports an unconfigured key and makes no request at all. The reading is served by a second Remote method (`whalePet.balance`), is off by default, and carries amounts only — no key, no response body, and no transcript content crosses to the client.
 - Subagent activity is not counted as separate ordinary main sessions.
 - Normal completion is eligible immediately; it does not wait for driver idle. Waiting and errors retain their display priority.
 - Cancellation, history, reconnect baselines and falling running counts alone do not produce success. DSH's green unread indicator is not substituted for a normal completion reason.

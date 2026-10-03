@@ -78,6 +78,38 @@ function acquireWhaleNamespace(ctx, abort) {
 }
 
 /**
+ * Read the Host's balance snapshot once. Never throws: a missing namespace, a
+ * disconnected transport or a rejected call all resolve to an unavailable frame,
+ * so the caller renders one phrase rather than a stale number.
+ * @returns {Promise<object>} a parsed WhaleBalance frame.
+ */
+export async function readWhaleBalance(ctx) {
+  const remote = ctx?.remote;
+  if (!remote || typeof remote.$mount !== 'function') return { available: false, source: 'unreachable' };
+  const abort = new AbortController();
+  const waiting = setTimeout(() => abort.abort(), 8000);
+  let scope, handle;
+  try {
+    const lease = acquireWhaleRemote(ctx, remote);
+    try {
+      await lease.ready;
+      scope = await acquireWhaleNamespace(ctx, abort);
+      // The Host publishes one reading as a single-frame stream.
+      handle = scope.service.balance(abort.signal);
+      for await (const value of handle) return WhaleBridgeContract.WHALE_BALANCE_SCHEMA.parse(value);
+      return { available: false, source: 'unreachable' };
+    } finally { lease.release(); }
+  } catch {
+    return { available: false, source: 'unreachable' };
+  } finally {
+    clearTimeout(waiting);
+    abort.abort();
+    try { await handle?.dispose?.(); } catch { /* already closed */ }
+    try { await scope?.dispose?.(); } catch { /* already withdrawn */ }
+  }
+}
+
+/**
  * Observe live global boundaries. Returns synchronous, idempotent cleanup.
  * onBoundary({sessionId,id,seq,type,reason?,time,hostEpoch,streamSeq,isSubagent?})
  * onReset({reason?,hostEpoch?,streamSeq?,identities?}) discards unplayed notifications.
