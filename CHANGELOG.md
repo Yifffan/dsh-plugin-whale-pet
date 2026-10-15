@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.3.0 — 2026-10-15
+
+### Added
+
+- A school of fish swims past every so often. A whale that is working puts the laptop down, turns, swims after the school across the window, eats the straggler and returns to the spot it left. Five localized lines cover the beats: notice, tempted, chase, chomp, back to work.
+- **Chase passing fish**, a third switch in the settings menu, turns the gag off on its own without touching the rest of the pet.
+- Three school shapes are drawn per visit, so consecutive visits do not look identical.
+- `assets/fish.svg`, an original fish drawn for this project and licensed like the code.
+
+### Behavior notes
+
+- The whale is displaced by CSS transforms only. `left`/`top` and the stored position preference never change, so it always comes back to the pixel the user chose, and starting a drag cancels the gag immediately.
+- A genuine `waiting`, `celebrate` or `error` state always wins: fish never hide a pending decision, a failure or a win. Clicking or dragging the whale, hiding it, turning off **Gentle animations** or a host that asks for reduced motion also ends it at once.
+- Reduced motion is honored twice over: the director refuses to schedule a school, and the existing media query freezes the timeline.
+- No new network access, model calls or collected data. The gag is a local CSS timeline driven by wall-clock time and one random draw, and it is never persisted.
+
+### Verification
+
+- 200 portable checks pass, including a dedicated `tests/temptation.test.mjs` that pins the schedule, the quiet gap and every interruption, and asserts that the CSS timeline and the director agree.
+- The offline browser check drives the real timeline: the school appears, the whale's box moves more than 200 px while `position.x` stays exactly where it was, the straggler lands within 30 px of the whale's mouth and disappears, a pending decision clears the gag, and a reduced-motion host gets no fish at all.
+
+### Artwork
+
+- The whale poses are existing assets reused verbatim through CSS transforms; no whale illustration was redrawn. Only the fish is new, and it is MIT-licensed separately from the DeepSeek stickers. See [artwork permission](ASSETS-LICENSE.md).
+
+Wait for active tasks to finish before updating. Fully quit and reopen DSH after the update to load the new Host and client modules. No profile migration or restart is performed automatically.
+
 ## 0.2.9 — 2026-09-29
 
 ### Added

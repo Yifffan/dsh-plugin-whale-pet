@@ -64,6 +64,16 @@ DSH使用ID匹配profile等配置层中的覆盖项。旧ID找不到目标时会
 
 图标没有底色圆板。插件卡片外框本身不填充，所以深色主题下黑色描边与页面背景对比度较低，轮廓主要由白色肚皮和亮蓝身体支撑；浅色主题下与界面融合自然。
 
+## 正式 0.3.0 的变化
+
+本版新增「鱼群路过」小剧场：工作/休息/打盹中的鲸鱼偶尔会被一群游过的鱼勾走，放下手头的事横穿窗口追鱼、吃掉落后的那一条，再游回原位继续。设置菜单里多了一个开关「偶尔追鱼」，可以单独关掉它。新增的 `assets/fish.svg` 是本项目自绘、按 MIT 授权的原创小鱼，与 DeepSeek 的鲸鱼贴纸许可分开；鲸鱼姿态仍是既有素材经 CSS 变换复用，没有重绘。
+
+**条目 ID、模块名和偏好设置格式都没有变化**，升级不需要迁移配置。既有偏好会原样保留，`偶尔追鱼` 默认为开启——升级后如果发现偏好没有被清空，那是预期行为，不需要手动处理。
+
+追鱼只用 CSS 位移完成，**不会改动你保存的位置**：鲸鱼每次都回到原来那个像素。等待确认、任务失败、完成庆祝这三种真实状态优先级更高，鱼群不会遮住它们；点一下或拖动鲸鱼、收起鲸鱼、关闭「轻柔动画」，也会立刻结束小剧场。此外，系统或环境声明 `prefers-reduced-motion: reduce` 时不会出现任何鱼——这是刻意保留的无障碍行为。若你的 Windows 关闭了「在 Windows 中显示动画」，插件里连原有的呼吸/工作动画也会被一并冻结，打开该系统开关即可（同时鱼群才会出现）。
+
+在 DSH 插件管理器中使用 `dsh-plugin-whale-pet@0.3.0` 更新。安装包变化后仍需等任务结束、完整退出并重开 DSH。
+
 ---
 
 **English summary:** releases up to 0.2.6 used entry ID `dsh-plugin-whale-pet`; 0.2.7 and later use `whale-pet`, while the module name stays unchanged. Migrate only the plugin's ID-targeted overrides, preserve their original enabled/disabled state, and review conflicting/custom layers manually. No automatic profile migration runs on install. Complete package/configuration changes while DSH is stopped, and verify the resulting entry and state before resuming work.

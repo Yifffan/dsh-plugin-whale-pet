@@ -12,6 +12,10 @@ This project has permission to use and distribute these assets in this repositor
 
 This notice grants no additional rights to adapt the assets, use them commercially, use trademarks, or exercise any other rights not expressly agreed upon. For use beyond the scope of this project, obtain separate permission from the relevant rights holders.
 
+## Fish Artwork
+
+`assets/fish.svg` is **not** a DeepSeek asset. It was drawn for this plugin, is covered by the same MIT license as the code, and may be reused under those terms. It is a single small fish; the school is that one image repeated and moved by CSS. No whale file was redrawn to build the chase: the existing poses are reused verbatim through CSS transforms.
+
 ## Separate from the Code License
 
 This project does not designate these assets as MIT-licensed, CC0, or original works owned by the project owner. The MIT license for the code does not apply to the whale SVGs, image previews, or whale images embedded in generated bundles. Embedding the images in code or installation packages does not change their ownership.

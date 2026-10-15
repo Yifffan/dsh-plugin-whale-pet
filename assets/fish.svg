@@ -1,0 +1,26 @@
+<svg width="104" height="64" viewBox="0 0 104 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="fishBody" x1="18" y1="12" x2="76" y2="52" gradientUnits="userSpaceOnUse">
+<stop stop-color="#9DEFFA"/>
+<stop offset="1" stop-color="#2F93C4"/>
+</linearGradient>
+<linearGradient id="fishTail" x1="74" y1="12" x2="96" y2="52" gradientUnits="userSpaceOnUse">
+<stop stop-color="#6FD2E8"/>
+<stop offset="1" stop-color="#2372A6"/>
+</linearGradient>
+<linearGradient id="fishFin" x1="36" y1="4" x2="60" y2="50" gradientUnits="userSpaceOnUse">
+<stop stop-color="#8AE6F4"/>
+<stop offset="1" stop-color="#2E88B4"/>
+</linearGradient>
+</defs>
+<path d="M74 32C80 27 87 18 95 11C97.5 22 97.5 42 95 53C87 46 80 37 74 32Z" fill="url(#fishTail)"/>
+<path d="M36 12.5C42 3 54 2.5 60 11.5C52 9 44 9.5 36 12.5Z" fill="url(#fishFin)"/>
+<path d="M40 39C45 45.5 52 49.5 59 49C52.5 52.5 44 48.5 40 39Z" fill="url(#fishFin)"/>
+<path d="M12 32C12 20.5 24.5 11 40 11C55.5 11 70 20 74.5 32C70 44 55.5 53 40 53C24.5 53 12 43.5 12 32Z" fill="url(#fishBody)"/>
+<path opacity="0.75" d="M18 36C24 46 36 50 48 48.5C38 52.5 24 48.5 18 36Z" fill="#EAFBFF"/>
+<path opacity="0.35" d="M48 14C46.5 24 46.5 40 48 50C50.5 40 50.5 24 48 14Z" fill="#1B2A63"/>
+<path opacity="0.25" d="M61 16C59.8 25 59.8 39 61 48C62.5 39 62.5 25 61 16Z" fill="#1B2A63"/>
+<path opacity="0.4" d="M35 20C33.2 27 33.2 37 35 44C36.6 37 36.6 27 35 20Z" fill="#1B2A63"/>
+<path d="M22.5 28C22.5 25 25 22.5 28 22.5C31 22.5 33.5 25 33.5 28C33.5 31 31 33.5 28 33.5C25 33.5 22.5 31 22.5 28Z" fill="#1B2A63"/>
+<path d="M25.4 25.6C25.4 24.5 26.3 23.6 27.4 23.6C28.5 23.6 29.4 24.5 29.4 25.6C29.4 26.7 28.5 27.6 27.4 27.6C26.3 27.6 25.4 26.7 25.4 25.6Z" fill="#F3FDFF"/>
+</svg>

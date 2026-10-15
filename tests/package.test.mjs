@@ -18,7 +18,7 @@ test('package is a self-contained DSH bundle with only its own inserted row', ()
   for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack', 'postpack']) {
     assert.equal(manifest.scripts[hook], undefined);
   }
-  assert.equal(manifest.version, '0.2.9');
+  assert.equal(manifest.version, '0.3.0');
   assert.equal(fs.existsSync(path.join(root, 'lib/version.js')), false);
   assert.equal(manifest.files.includes('DIAGNOSTICS.md'), false);
   assert.deepEqual(manifest.repository, { type: 'git', url: 'git+https://github.com/Yifffan/dsh-plugin-whale-pet.git' });
@@ -88,10 +88,12 @@ test('embedded bubble fonts ship with OFL notices and no runtime font dependency
   assert.match(read('FONT-LICENSES.md'), /Fredoka/); assert.match(read('FONT-LICENSES.md'), /ZCOOL/);
   assert.match(read('lib/client.js'), /data:font\/woff2;base64,/);
 });
-test('six inert SVGs and offline preview are present, without source paths', () => {
-  for (const name of ['working', 'celebrate', 'waiting', 'resting', 'sleeping', 'error']) {
+test('seven inert SVGs and offline preview are present, without source paths', () => {
+  for (const name of ['working', 'celebrate', 'waiting', 'resting', 'sleeping', 'error', 'fish']) {
     const svg = read(`assets/${name}.svg`); assert.match(svg, /^<svg/); assert.doesNotMatch(svg, /<script|<foreignObject|\son\w+=|\shref=/i);
   }
+  // The fish is project artwork, and it ships like the rest of the artwork: inert, embedded, no network path.
+  assert.ok(read('lib/client.js').includes(Buffer.from(read('assets/fish.svg')).toString('base64').slice(0, 60)));
   assert.doesNotMatch(read('lib/client.js'), /\/Users\/|fetch\(|XMLHttpRequest|dsh-pet-research|bridge-build-probe/);
   assert.doesNotMatch(read('lib/remote.js'), /\/Users\/|dsh-pet-research|bridge-build-probe/);
   const preview = read('preview/index.html');

@@ -1,4 +1,5 @@
 import { PetStateMachine, cleanPreferences, clampPosition, STORAGE_KEY } from './state.js';
+import { FishTemptation } from './temptation.js';
 import { normalizeLanguage, translate } from './i18n.js';
 import { acquireBubbleFonts } from './fonts.js';
 import { bubbleLayout } from './bubble-layout.js';
@@ -16,12 +17,16 @@ export class WhaleWidget {
     this.assets = assets;
     this.cleanups = [];
     this.disposed = false;
+    this.chaseActive = false;
+    this.chaseStartedAt = null;
+    this.artState = undefined;
     this.storage = storage;
     if (storage === undefined) { try { this.storage = window.localStorage; } catch { this.storage = null; } }
     let saved;
     try { saved = JSON.parse(this.storage?.getItem(STORAGE_KEY) || 'null'); } catch { /* corrupt storage is optional */ }
     this.preferences = cleanPreferences(saved);
     this.machine = new PetStateMachine(now(), this.preferences.sleepAfterMs);
+    this.temptation = new FishTemptation(now());
     this.root = host.shadowRoot || host.attachShadow({ mode: 'open' });
     this.root.replaceChildren();
     const sheet = document.createElement('style');
@@ -30,6 +35,7 @@ export class WhaleWidget {
     // All HTML is static; SVGs are validated at build time and rendered as inert images.
     const template = document.createElement('template');
     template.innerHTML = `
+      <div class="fish-school" aria-hidden="true"><img class="fish" alt="" draggable="false" /><img class="fish" alt="" draggable="false" /><img class="fish" alt="" draggable="false" /><img class="fish" alt="" draggable="false" /><img class="fish" alt="" draggable="false" /><img class="fish fish-caught" alt="" draggable="false" /><span class="chomp"><span></span><span></span><span></span></span></div>
       <div class="pet" data-state="resting">
         <div class="bubble" aria-hidden="true"><span class="bubble-message"></span></div><span class="ground"></span>
         <button type="button" class="pet-button" aria-label="Whale companion" aria-keyshortcuts="Enter Space ArrowUp ArrowDown ArrowLeft ArrowRight">
@@ -48,6 +54,7 @@ export class WhaleWidget {
         <div class="setting"><label for="whale-scope" data-i18n="setting.scope"></label><span class="select-control"><select id="whale-scope"><option value="current" data-i18n="setting.scopeCurrent"></option><option value="global" data-i18n="setting.scopeGlobal"></option></select><span class="select-arrow" aria-hidden="true"></span></span></div>
         <div class="setting"><label for="whale-size"><span data-i18n="setting.size"></span> <output class="size-value"></output></label><input id="whale-size" type="range" min="65" max="160" step="5" /></div>
         <div class="setting"><label for="whale-motion" data-i18n="setting.motion"></label><input id="whale-motion" type="checkbox" role="switch" /></div>
+        <div class="setting"><label for="whale-fish" data-i18n="setting.fish"></label><input id="whale-fish" type="checkbox" role="switch" /></div>
         <div class="setting"><label for="whale-sleep" data-i18n="setting.sleep"></label><span class="select-control"><select id="whale-sleep"><option value="30000" data-i18n="setting.seconds30"></option><option value="120000" data-i18n="setting.minutes2"></option><option value="300000" data-i18n="setting.minutes5"></option></select><span class="select-arrow" aria-hidden="true"></span></span></div>
         <div class="panel-actions"><button class="action reset" type="button" data-i18n="action.reset"></button><button class="action hide" type="button" data-i18n="action.hide"></button></div>
       </section>
@@ -67,7 +74,12 @@ export class WhaleWidget {
     this.restore = this.root.querySelector('.restore');
     this.range = this.root.querySelector('#whale-size');
     this.motion = this.root.querySelector('#whale-motion');
+    this.fish = this.root.querySelector('#whale-fish');
     this.sleep = this.root.querySelector('#whale-sleep');
+    // The school is decoration: one inert image per fish, positioned entirely by CSS.
+    this.fishLayer = this.root.querySelector('.fish-school');
+    this.fishes = [...this.root.querySelectorAll('.fish')];
+    if (this.assets?.fish) for (const fish of this.fishes) fish.src = this.assets.fish;
     const fontLease = acquireBubbleFonts(host.ownerDocument, fonts);
     this.fontsReady = fontLease.ready;
     this.cleanups.push(() => fontLease.release());
@@ -113,7 +125,10 @@ export class WhaleWidget {
       this.onScopeChange(scope); this.paint();
     });
     this.listen(this.motion, 'change', () => {
-      this.preferences.motion = this.motion.checked; this.applyPreferences(); this.save();
+      this.preferences.motion = this.motion.checked; this.applyPreferences(); this.save(); this.paint();
+    });
+    this.listen(this.fish, 'change', () => {
+      this.preferences.fish = this.fish.checked; this.applyPreferences(); this.save(); this.paint();
     });
     this.listen(this.sleep, 'change', () => {
       this.preferences.sleepAfterMs = Number(this.sleep.value);
@@ -170,6 +185,7 @@ export class WhaleWidget {
     this.range.style.setProperty('--range-progress', `${(Number(this.range.value) - Number(this.range.min)) / (Number(this.range.max) - Number(this.range.min)) * 100}%`);
     this.scope.value = this.preferences.scope;
     this.motion.checked = this.preferences.motion;
+    this.fish.checked = this.preferences.fish;
     this.sleep.value = String(this.preferences.sleepAfterMs);
     this.machine.sleepAfterMs = this.preferences.sleepAfterMs;
     this.host.dataset.motion = String(this.preferences.motion);
@@ -184,6 +200,8 @@ export class WhaleWidget {
     this.position = clampPosition(this.preferences.x ?? window.innerWidth - size - 24,
       this.preferences.y ?? window.innerHeight - size - 90, size, size, window.innerWidth, window.innerHeight, top);
     this.pet.style.left = `${this.position.x}px`; this.pet.style.top = `${this.position.y}px`;
+    // A resize mid-chase re-aims the run instead of stranding the whale off-screen.
+    if (this.chaseActive) this.planChase();
     this.positionBubble();
     if (!this.panel.hidden) this.positionPanel();
   }
@@ -224,6 +242,8 @@ export class WhaleWidget {
   }
   pointerDown(e) {
     if (e.button !== 0 || !e.isPrimary) return;
+    // A hand on the whale always beats a fish: snap home before the drag takes over.
+    if (this.chaseActive) { this.temptation.interrupt(this.now()); this.paint(); }
     this.suppressClick = false;
     this.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, originX: this.position.x, originY: this.position.y, moved: false };
     this.button.setPointerCapture(e.pointerId);
@@ -247,18 +267,79 @@ export class WhaleWidget {
     if (this.button.hasPointerCapture(e.pointerId)) this.button.releasePointerCapture(e.pointerId);
   }
   update(snapshot) { if (!this.disposed) { this.machine.update(snapshot, this.now()); this.paint(); } }
+  /** Reduced motion must silence the gag too: CSS cannot animate what it is told to freeze. */
+  reducedMotion() {
+    try { return document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true; } catch { return false; }
+  }
+  chaseContext(state) {
+    return {
+      enabled: Boolean(this.preferences.fish && this.preferences.motion && this.assets?.fish) && !this.reducedMotion(),
+      paused: Boolean(document.hidden) || this.preferences.hidden,
+      dragging: Boolean(this.drag && this.drag.moved),
+      state,
+    };
+  }
+  /**
+   * Anchor one school and the whale's run to wherever the whale actually is.
+   * Nothing here is persisted: the whale is displaced by CSS only, so it always
+   * returns to the exact spot the user chose.
+   */
+  planChase() {
+    if (this.disposed || !this.position || !this.fishLayer) return;
+    const size = 156 * this.preferences.scale;
+    const viewportWidth = window.innerWidth;
+    const margin = 12;
+    const leftRoom = Math.max(0, this.position.x - margin);
+    const rightRoom = Math.max(0, viewportWidth - size - margin - this.position.x);
+    // The whale artwork faces left, so chasing left needs no mirroring.
+    const direction = leftRoom >= rightRoom ? -1 : 1;
+    const room = direction < 0 ? leftRoom : rightRoom;
+    // Stop short of the wall: the whale keeps room for its own bubble at the end of the run.
+    const run = Math.round(direction * Math.min(viewportWidth * 0.52, Math.max(size, room * 0.82)));
+    // The mouth sits at the leading edge of the artwork: left when unflipped, right when mirrored.
+    const mouth = this.position.x + size * (direction < 0 ? 0.2 : 0.8);
+    const catchX = this.position.x + run + size * (direction < 0 ? 0.2 : 0.8);
+    const school = this.temptation.view(this.now()).school;
+    this.pet.style.setProperty('--chase-run', `${run}px`);
+    this.pet.style.setProperty('--chase-face', direction < 0 ? '1' : '-1');
+    this.pet.style.setProperty('--chase-tilt', '4deg');
+    this.fishLayer.style.setProperty('--fish-scale', String(this.preferences.scale));
+    this.fishLayer.style.setProperty('--fish-dir', String(direction));
+    this.fishLayer.style.setProperty('--fish-face', direction < 0 ? '1' : '-1');
+    this.fishLayer.style.setProperty('--fish-lane', `${Math.round(this.position.y + size * 0.5)}px`);
+    this.fishLayer.style.setProperty('--fish-in', direction < 0 ? '106vw' : '-32vw');
+    this.fishLayer.style.setProperty('--fish-out', direction < 0 ? '-36vw' : '106vw');
+    // The school is faster and pulls away; only the tiring straggler is caught.
+    this.fishLayer.style.setProperty('--fish-near', `${Math.round(mouth + direction * 120)}px`);
+    this.fishLayer.style.setProperty('--fish-flee', `${Math.round(catchX + direction * 260)}px`);
+    this.fishLayer.style.setProperty('--fish-lag', `${Math.round(mouth + direction * 60)}px`);
+    this.fishLayer.style.setProperty('--fish-tire', `${Math.round(catchX + direction * 45)}px`);
+    this.fishLayer.style.setProperty('--catch-x', `${Math.round(catchX)}px`);
+    this.fishLayer.style.setProperty('--catch-y', `${Math.round(this.position.y + size * 0.48)}px`);
+    this.fishLayer.dataset.school = String(school);
+  }
   paint() {
     if (this.disposed) return;
-    const view = this.machine.view(this.now());
-    if (this.pet.dataset.state !== view.state || !this.image.getAttribute('src')) {
-      this.pet.dataset.state = view.state; this.image.src = this.assets[view.state];
-    }
-    this.pet.dataset.notice = String(Boolean(view.noticeKey || ['waiting', 'celebrate', 'error'].includes(view.state) || view.greeting));
-    this.pet.dataset.touch = String(Boolean(view.greeting && !view.noticeKey && !['waiting', 'working', 'celebrate', 'error'].includes(view.state)));
-    const count = view.state === 'working' && Number.isFinite(view.workingCount) ? Math.max(0, Math.floor(view.workingCount)) : 0;
+    const now = this.now();
+    const view = this.machine.view(now);
+    const temptation = this.temptation.update(now, this.chaseContext(view.state));
+    const chase = temptation.active;
+    if (chase && this.chaseStartedAt !== this.temptation.startedAt) this.planChase();
+    this.chaseStartedAt = chase ? this.temptation.startedAt : null;
+    this.chaseActive = chase;
+    if (chase) this.host.dataset.chase = 'active'; else delete this.host.dataset.chase;
+    if (chase && temptation.phase === 'catch') this.host.dataset.catch = 'active'; else delete this.host.dataset.catch;
+    this.pet.dataset.chasePhase = temptation.phase;
+    // It drops the laptop and keeps the plain swimming pose until it is back at work.
+    const artState = chase ? 'resting' : view.state;
+    if (this.pet.dataset.state !== view.state) this.pet.dataset.state = view.state;
+    if (this.artState !== artState || !this.image.getAttribute('src')) { this.artState = artState; this.image.src = this.assets[artState]; }
+    this.pet.dataset.notice = String(Boolean(chase || view.noticeKey || ['waiting', 'celebrate', 'error'].includes(view.state) || view.greeting));
+    this.pet.dataset.touch = String(Boolean(!chase && view.greeting && !view.noticeKey && !['waiting', 'working', 'celebrate', 'error'].includes(view.state)));
+    const count = !chase && view.state === 'working' && Number.isFinite(view.workingCount) ? Math.max(0, Math.floor(view.workingCount)) : 0;
     this.countOverlay.toggleAttribute('hidden', count === 0);
     this.countText.textContent = count > 0 ? (count > 99 ? '99+' : String(count)) : '';
-    const messageKey = view.noticeKey || (view.greeting && view.state === 'resting' ? 'pet.greeting' : view.messageKey);
+    const messageKey = chase ? temptation.key : (view.noticeKey || (view.greeting && view.state === 'resting' ? 'pet.greeting' : view.messageKey));
     const message = translate(this.language, messageKey);
     this.bubbleText.textContent = message;
     this.positionBubble();
@@ -273,7 +354,7 @@ export class WhaleWidget {
     this.disposed = true;
     for (const cleanup of this.cleanups.splice(0).reverse()) cleanup();
     this.root.replaceChildren();
-    delete this.host.dataset.paused; delete this.host.dataset.motion;
+    delete this.host.dataset.paused; delete this.host.dataset.motion; delete this.host.dataset.chase; delete this.host.dataset.catch;
     if (this.originalLang === null) this.host.removeAttribute('lang');
     else this.host.setAttribute('lang', this.originalLang);
   }

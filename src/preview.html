@@ -7,7 +7,7 @@
 <header><div class="brand"><span class="logo">≈</span>小鲸鱼 <small>WHALE COMPANION</small></div><div class="top-actions"><span class="version">DSH PLUGIN / __PACKAGE_VERSION__</span><button class="test-button language" aria-label="切换宠物语言预览" title="仅模拟宠物语言，不连接 DSH">EN</button><button class="theme" aria-label="切换深浅色主题" title="切换深浅色">◐</button></div></header>
 <main><div class="heading"><div><div class="eyebrow">A LITTLE COMPANY</div><h1>认真工作，<span>也好好休息。</span></h1><p class="intro">一只小鲸鱼，六种小心情。<br>陪你写下每一个想法，也陪你等一个好结果。</p></div><span class="local-tag">本地动画预览 · 不连接会话</span></div>
 <div class="grid"><section class="stage" aria-label="角色姿态展示"><span class="stage-label">MEET YOUR COMPANION</span><span class="stage-counter">01 / 06</span><div class="hero-wrap"><span class="hero-shadow"></span><img class="hero-img" alt="休息中的小鲸鱼"></div><h2 class="stage-name">休息一下</h2><p class="stage-detail">不用一直忙碌，我就在这里。</p><div class="stage-footer"><span></span>你的角色素材 · SVG 无损缩放</div></section>
-<aside class="controls"><div class="section-kicker">TRY IT OUT</div><h2>让它陪你走一轮</h2><p>右下角是真正的可交互宠物。<br>点击打招呼，右键打开小设置。</p><div class="test-actions"><button class="test-button primary" data-action="start">开始工作 ↗</button><button class="test-button" data-action="wait">等待确认 ?</button><button class="test-button" data-action="finish">正常完成 ✓</button><button class="test-button" data-action="abort">中止任务</button><button class="test-button" data-action="sleep">空闲入睡</button><button class="test-button" data-action="parallel">两个会话工作</button><button class="test-button" data-action="one-done">其中一个完成</button><button class="test-button" data-action="error">任务失败</button></div><div class="divider"></div><div class="statusline"><span>宠物状态</span><output id="live-state">休息</output></div><p class="hint">模拟完成才会欢呼；中止不会。<br>角色卡片仅用于展示指定姿态。</p></aside></div>
+<aside class="controls"><div class="section-kicker">TRY IT OUT</div><h2>让它陪你走一轮</h2><p>右下角是真正的可交互宠物。<br>点击打招呼，右键打开小设置。</p><div class="test-actions"><button class="test-button primary" data-action="start">开始工作 ↗</button><button class="test-button" data-action="wait">等待确认 ?</button><button class="test-button" data-action="finish">正常完成 ✓</button><button class="test-button" data-action="abort">中止任务</button><button class="test-button" data-action="sleep">空闲入睡</button><button class="test-button" data-action="parallel">两个会话工作</button><button class="test-button" data-action="one-done">其中一个完成</button><button class="test-button" data-action="error">任务失败</button><button class="test-button" data-action="fish">鱼群路过</button></div><div class="divider"></div><div class="statusline"><span>宠物状态</span><output id="live-state">休息</output></div><p class="hint">模拟完成才会欢呼；中止不会。<br>工作再认真，也架不住一条鱼。</p></aside></div>
 <div class="collection-head"><h2>六种心情，都很认真</h2><span>THE LITTLE MOMENTS</span></div><div class="poses"></div>
 <p class="notice"><strong>这里是独立预览，不是 DSH 实时画面。</strong> 与插件共用同一套宠物组件、素材和状态机；没有网络请求或模型调用。</p>
 <footer><span>轻轻呼吸，慢慢来。<br>WHALE STICKERS © DEEPSEEK · PERSONAL PROJECT</span><span>可拖动 · 可缩放 · 尊重减少动态效果设置<br>右下角宠物被收起后，可用「唤回小鲸鱼」恢复</span></footer></main>
@@ -15,10 +15,11 @@
 <script>/*__RUNTIME__*/</script>
 <script>
 const poses=[['resting','休息一下','REST','不用一直忙碌，我就在这里。'],['working','认真工作','WORK','把每一个小问题，都认真想一想。'],['celebrate','完成啦！','HOORAY','又做好了一件事，值得小小庆祝。'],['waiting','等你一下','WAIT','这个决定，想听听你的意见。'],['sleeping','眯一小会儿','SLEEP','安静充电中，有事叫醒我。'],['error','遇到问题了','OOPS','这个任务需要你看一下。']];
-let clockOffset=0,turn=0;
+let clockOffset=0,turn=0,petRef=null;
 let snapshot={sessionId:'preview',available:true,running:false,pending:false};
 const labels={resting:'休息',working:'工作中',waiting:'等待确认',celebrate:'欢呼',sleeping:'睡觉',error:'遇到问题'};
-const pet=new WhalePet.WhaleWidget(document.querySelector('#whale-host'),{assets:WhalePet.assets,css:WhalePet.css,fonts:WhalePet.fonts,storage:null,language:'zh',now:()=>Date.now()+clockOffset,onView:view=>{document.querySelector('#live-state').textContent=labels[view.state];}});
+const pet=new WhalePet.WhaleWidget(document.querySelector('#whale-host'),{assets:WhalePet.assets,css:WhalePet.css,fonts:WhalePet.fonts,storage:null,language:'zh',now:()=>Date.now()+clockOffset,onView:view=>{const chase=petRef&&petRef.temptation.view(Date.now()+clockOffset);document.querySelector('#live-state').textContent=chase&&chase.active?'摸鱼中':labels[view.state];}});
+petRef=pet;
 // Independently drawn preview-only chevron; production uses the live DSH React component.
 for(const target of pet.root.querySelectorAll('.select-arrow')) target.innerHTML=WhalePet.previewChevron;
 pet.update(snapshot);
@@ -38,6 +39,7 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click'
   snapshot={...snapshot,notice:undefined};pet.update(snapshot);
   snapshot={...snapshot,pending:false,notice:{id:'error:'+ ++turn,reason:'error'}};
  }
+ if(action==='fish')snapshot={...snapshot,running:true,pending:false,notice:undefined,workingCount:1};
  if(action==='wait')snapshot={...snapshot,running:true,pending:true};
  if(action==='finish'||action==='abort'){
   if(!snapshot.running){snapshot={...snapshot,running:true,pending:false};pet.update(snapshot);}
@@ -45,6 +47,8 @@ document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click'
  }
  if(action==='sleep'){snapshot={...snapshot,running:false,pending:false,notice:undefined,workingCount:0};pet.update(snapshot);clockOffset+=pet.preferences.sleepAfterMs+5000;}
  pet.update(snapshot);showPose(pet.machine.view(Date.now()+clockOffset).state);
+ // The fish gag is scheduled by the plugin itself; this button only asks for one now.
+ if(action==='fish'){pet.temptation.start(Date.now()+clockOffset);pet.paint();}
 }));
 // Preview-only driver for browser tests; not included in the plugin bundle.
 window.previewPet=pet;window.previewSet=s=>{snapshot=s;pet.update(s);};

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const { version } = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -97,6 +97,89 @@ try {
   await snapshot(base, 'working');
   await snapshot({ ...base, running: false, workingCount: 0, outcome: { id: 'aborted-task', reason: 'aborted' } }, 'resting');
 
+  // The fish gag in a real browser: a school, a run, one eaten straggler, and a whale
+  // that is displaced by transform alone, so the saved spot never moves. A host that
+  // asks for reduced motion gets no fish at all, so emulate a motion-friendly host
+  // first and assert that guarantee with `reduce` before moving on.
+  await page('Page.bringToFront');
+  await page('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  const quiet = await evaluate(`(() => {
+    const pet = previewPet, start = Date.now();
+    pet.temptation.clear(); pet.temptation.start(start);
+    pet.paint();
+    const status = { enabled: pet.chaseContext('working').enabled, chase: Object.hasOwn(pet.host.dataset, 'chase'), display: getComputedStyle(pet.root.querySelector('.fish-school')).display };
+    pet.temptation.clear(); pet.paint();
+    return status;
+  })()`);
+  assert.deepEqual(quiet, { enabled: false, chase: false, display: 'none' }, 'reduced motion must silence the fish entirely');
+  await page('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+  const school = await evaluate(`(() => {
+    const pet = previewPet, start = Date.now();
+    window.__savedNow = pet.now; window.__fishStart = start;
+    pet.temptation.clear(); pet.temptation.start(start);
+    pet.now = () => start;
+    pet.paint();
+    const layer = pet.root.querySelector('.fish-school');
+    const status = {
+      chase: pet.host.dataset.chase, phase: pet.pet.dataset.chasePhase, display: getComputedStyle(layer).display,
+      fish: pet.root.querySelectorAll('.fish').length, counter: pet.countOverlay.hasAttribute('hidden'),
+      bubble: pet.bubbleText.textContent, label: pet.button.getAttribute('aria-label'),
+      run: pet.pet.style.getPropertyValue('--chase-run'), catchX: layer.style.getPropertyValue('--catch-x'),
+      petAnimations: pet.pet.getAnimations().map(animation => animation.effect.getTiming().duration),
+      fishDurations: [...new Set([...pet.root.querySelectorAll('.fish')].flatMap(node => node.getAnimations().map(animation => animation.effect.getTiming().duration)))].sort((a, b) => a - b),
+      src: pet.image.getAttribute('src').slice(0, 26),
+    };
+    for (const animation of pet.pet.getAnimations()) animation.pause();
+    return status;
+  })()`);
+  assert.equal(school.chase, 'active', 'a school must show up on demand');
+  assert.equal(school.phase, 'notice');
+  assert.equal(school.display, 'block');
+  assert.equal(school.fish, 6);
+  assert.equal(school.counter, true, 'the work counter steps aside while the whale is off duty');
+  assert.match(school.bubble, /./);
+  assert.ok(school.label.includes(school.bubble), 'the gag is announced, not silently visual');
+  assert.match(school.run, /^-?\d+px$/);
+  assert.match(school.catchX, /^\d+px$/);
+  assert.match(school.src, /^data:image\/svg\+xml;base64,/, 'the laptop pose is swapped for the plain one');
+  assert.deepEqual(school.petAnimations, [7600], 'the whale run uses the documented 7.6 s timeline');
+  assert.deepEqual(school.fishDurations, [950, 7600]);
+  const swim = await evaluate(`(() => {
+    const pet = previewPet, node = pet.pet;
+    const set = time => { for (const animation of node.getAnimations()) { animation.pause(); animation.currentTime = time; } };
+    set(0); const home = Math.round(node.getBoundingClientRect().x);
+    set(4200); const mid = Math.round(node.getBoundingClientRect().x);
+    set(9000); const back = Math.round(node.getBoundingClientRect().x);
+    return { home, mid, back, saved: Math.round(pet.position.x) };
+  })()`);
+  assert.ok(swim.mid < swim.home - 200, `the whale must actually swim after the school: ${JSON.stringify(swim)}`);
+  assert.equal(swim.back, swim.home, 'and return to the very same pixel');
+  assert.equal(swim.saved, swim.home, 'because left/top, and therefore the saved spot, never changed');
+  const eaten = await evaluate(`(() => {
+    const pet = previewPet, start = window.__fishStart, straggler = pet.root.querySelectorAll('.fish')[5];
+    const set = time => { for (const animation of [...pet.pet.getAnimations(), ...straggler.getAnimations()]) { animation.pause(); animation.currentTime = time; } };
+    const catchX = Math.round(parseFloat(straggler.parentElement.style.getPropertyValue('--catch-x')));
+    pet.now = () => start + 5400; pet.paint();
+    set(5400);
+    const caught = { x: Math.round(straggler.getBoundingClientRect().x), opacity: Number(getComputedStyle(straggler).opacity), inFront: Number(getComputedStyle(straggler.parentElement).zIndex) > Number(getComputedStyle(pet.pet).zIndex) };
+    pet.now = () => start + 6000; pet.paint();
+    set(6000);
+    const gone = Number(getComputedStyle(straggler).opacity);
+    return { catchX, caught, gone, phase: pet.pet.dataset.chasePhase, front: pet.host.dataset.catch };
+  })()`);
+  assert.equal(eaten.phase, 'catch');
+  assert.equal(eaten.front, 'active');
+  assert.ok(Math.abs(eaten.caught.x - eaten.catchX) <= 30, `the straggler must be at the whale's mouth: ${JSON.stringify(eaten)}`);
+  assert.equal(eaten.caught.inFront, true, 'the fish being eaten is drawn in front of the whale');
+  assert.equal(eaten.gone, 0, 'and is gone once swallowed');
+  // A real pending decision ends the gag at once and gives the spot back.
+  await evaluate(`previewSet(${JSON.stringify({ ...base, pending: true })})`);
+  const interrupted = await evaluate(`({chase: Object.hasOwn(previewPet.host.dataset, 'chase'), phase: previewPet.pet.dataset.chasePhase, x: Math.round(previewPet.pet.getBoundingClientRect().x), saved: Math.round(previewPet.position.x)})`);
+  assert.equal(interrupted.chase, false, 'a pending decision must never be hidden behind fish');
+  assert.equal(interrupted.phase, 'none');
+  assert.equal(interrupted.x, interrupted.saved, 'and the whale is back on its saved spot');
+  await evaluate(`previewPet.now = window.__savedNow; previewPet.temptation.clear(); previewSet(${JSON.stringify(base)})`);
+
   // Exercise normal keyboard, context-menu and settings actions, without special runtime APIs.
   await page('Page.bringToFront');
   await evaluate(`previewPet.button.focus()`);
@@ -153,14 +236,32 @@ try {
   assert.equal(await evaluate(`window.__clipboardCalls`), 0);
   assert.deepEqual(await evaluate(`window.__unhandled`), []);
   assert.deepEqual(exceptionEvents, []); assert.deepEqual(consoleErrors, []); assert.deepEqual(networkRequests, []);
-  console.log(JSON.stringify({ result: 'PASS', version, environment: 'isolated file:// preview, not live DSH', checks: ['no diagnostic/test menu controls', 'working/waiting/celebration/error snapshots', 'aborts do not celebrate', 'regular settings and hide/restore', 'keyboard menu/movement and pointer drag', 'Chinese/light and English/dark', '360x480 mobile menu bounds', 'no clipboard access', 'no network requests or runtime/unhandled errors'], screenshots: ['artifacts/release-ui-zh.png', 'artifacts/release-ui-en.png'] }, null, 2));
+  console.log(JSON.stringify({ result: 'PASS', version, environment: 'isolated file:// preview, not live DSH', checks: ['no diagnostic/test menu controls', 'working/waiting/celebration/error snapshots', 'aborts do not celebrate', 'fish school run, eaten straggler and untouched saved spot', 'regular settings and hide/restore', 'keyboard menu/movement and pointer drag', 'Chinese/light and English/dark', '360x480 mobile menu bounds', 'no clipboard access', 'no network requests or runtime/unhandled errors'], screenshots: ['artifacts/release-ui-zh.png', 'artifacts/release-ui-en.png'] }, null, 2));
 } catch (error) {
   console.error(chromeOutput);
   throw error;
 } finally {
   for (const item of pending.values()) clearTimeout(item.timer);
   socket?.close();
-  if (chrome.pid) { try { process.kill(-chrome.pid, 'SIGTERM'); } catch { /* already exited */ } }
-  if (chrome.pid && chrome.exitCode === null) await new Promise(resolve => { const timer = setTimeout(resolve, 3000); chrome.once('exit', () => { clearTimeout(timer); resolve(); }); });
-  fs.rmSync(profile, { recursive: true, force: true });
+  // Chromium's helper processes outlive its browser process, and a live child keeps
+  // this process alive through the stderr pipe. Kill the whole tree, on Windows too.
+  if (chrome.pid) {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/PID', String(chrome.pid), '/T', '/F'], { stdio: 'ignore' });
+    else { try { process.kill(-chrome.pid, 'SIGKILL'); } catch { try { chrome.kill('SIGKILL'); } catch { /* already exited */ } } }
+  }
+  // On Windows the re-parented helpers outlive /T, and a stack of them would build up
+  // across runs. Sweep our own throwaway profile path only; never touch a user browser.
+  if (process.platform === 'win32') {
+    const image = path.basename(chromePath);
+    spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
+      `Get-CimInstance Win32_Process -Filter "Name='${image}'" | Where-Object { $_.CommandLine -like '*${profile}*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`], { stdio: 'ignore' });
+  }
+  chrome.stderr?.destroy();
+  chrome.unref();
+  // Chromium children can hold the throwaway profile for a moment on Windows; a
+  // locked temp directory must never turn a passing check into a failure.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try { fs.rmSync(profile, { recursive: true, force: true }); break; }
+    catch { await new Promise(resolve => setTimeout(resolve, 250)); }
+  }
 }
