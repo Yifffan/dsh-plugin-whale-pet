@@ -2,7 +2,7 @@
 
 **Your little whale buddy for work, wins, and well-earned naps.**
 
-![Six whale states: working, waiting, celebrating, error, resting, and sleeping](https://raw.githubusercontent.com/Yifffan/dsh-plugin-whale-pet/v0.2.9/docs/images/whale-states.png)
+![Six whale states: working, waiting, celebrating, error, resting, and sleeping](https://raw.githubusercontent.com/Yifffan/dsh-plugin-whale-pet/v0.3.0/docs/images/whale-states.png)
 
 *Character state overview. Whale stickers are original artwork by DeepSeek.*
 
@@ -10,13 +10,14 @@ A little companion that lives inside your DeepSeek Harness (DSH) window—there 
 
 一只住在 DSH 窗口里的小鲸鱼。陪你工作、等你决定，也陪你好好打个盹。
 
-**Version 0.2.9** adds the custom plugin icon while keeping the completion synchronization confirmed in 0.2.8. The complete working-state whale is embedded unmodified in `assets/icon.svg`. See the [release notes](CHANGELOG.md) and [compatibility notes](COMPATIBILITY.md) for verification scope.
+**Version 0.3.0** adds passing fish: every so often a school swims by and a working whale cannot resist. The completion synchronization confirmed in 0.2.8 and the plugin icon from 0.2.9 are unchanged. See the [release notes](CHANGELOG.md) and [compatibility notes](COMPATIBILITY.md) for verification scope.
 
 ## Features
 
 - Drag, resize, hide, and restore your whale inside the DSH window.
 - Choose **All sessions** or **Current session**, with a working-session count for ordinary main sessions.
 - Six character states: resting, working, waiting, celebrating, sleeping, and error.
+- Every so often a school of fish swims past. A working whale drops the laptop, swims after them and eats the straggler before returning to the exact spot it left—and it always comes back, because the chase never touches your saved position.
 - A custom icon in the DSH plugin manager, embedded from the original whale artwork without redrawing it.
 - English and Chinese text, light and dark settings menus, and reduced-motion support.
 - Separate normal completion from cancellation and failure; a falling working count or green unread indicator alone does not mean success.
@@ -35,23 +36,23 @@ Enter the package name in DSH's plugin installation interface:
 dsh-plugin-whale-pet
 ```
 
-To pin this release, use `dsh-plugin-whale-pet@0.2.9`. The normal package name follows npm's `latest` channel; the old `beta` channel is not required.
+To pin this release, use `dsh-plugin-whale-pet@0.3.0`. The normal package name follows npm's `latest` channel; the old `beta` channel is not required.
 
 ### 2. GitHub
 
 Enter this pinned version spec in DSH's plugin installation interface:
 
 ```text
-github:Yifffan/dsh-plugin-whale-pet#v0.2.9
+github:Yifffan/dsh-plugin-whale-pet#v0.3.0
 ```
 
 The tagged source includes prebuilt plugin files; users do not need to build it themselves.
 
 ### 3. Download a local package
 
-[Download dsh-plugin-whale-pet-0.2.9.tgz](https://registry.npmjs.org/dsh-plugin-whale-pet/-/dsh-plugin-whale-pet-0.2.9.tgz)
+[Download dsh-plugin-whale-pet-0.3.0.tgz](https://registry.npmjs.org/dsh-plugin-whale-pet/-/dsh-plugin-whale-pet-0.3.0.tgz)
 
-Download the tgz onto the machine running DSH and enter its absolute local path in DSH's plugin installation interface. The package is also attached to the [GitHub release](https://github.com/Yifffan/dsh-plugin-whale-pet/releases/tag/v0.2.9). GitHub's automatically generated “Source code” archives are not plugin tgz packages.
+Download the tgz onto the machine running DSH and enter its absolute local path in DSH's plugin installation interface. The package is also attached to the [GitHub release](https://github.com/Yifffan/dsh-plugin-whale-pet/releases/tag/v0.3.0). GitHub's automatically generated “Source code” archives are not plugin tgz packages.
 
 **Upgrading from 0.2.6 or earlier? Read the [upgrade notes](UPGRADE.md) first.** Overrides for the old entry ID do not migrate automatically. Do not replace the plugin or restart DSH while tasks are running. This plugin never automatically edits your profile.
 
@@ -60,8 +61,9 @@ After an update that changes Host or client modules, wait for current tasks to f
 ## Usage
 
 - **Click** the whale to say hello; **drag** it to reposition.
-- **Right-click** to change session scope, size, animation, and nap timing.
+- **Right-click** to change session scope, size, animation, whether passing fish are chased, and nap timing.
 - Use the restore button to bring back a hidden whale.
+- A passing school is a short local animation. It never moves the position you saved, and a click, a drag, or a genuine waiting/error state ends it immediately.
 - Global scope covers ordinary main sessions on the currently connected Host—not multiple devices or Hosts.
 - Waiting for user input has higher display priority. Brief completion notices are not queued for later replay.
 
@@ -120,6 +122,7 @@ This project has permission to use and distribute the artwork in this repository
 
 - **Code:** [MIT License](LICENSE).
 - **Whale artwork:** [artwork permission notice](ASSETS-LICENSE.md), separate from the MIT code license.
+- **Fish artwork:** `assets/fish.svg` is original artwork drawn for this project and is covered by the MIT code license, unlike the whale stickers.
 - **Fonts:** [SIL OFL 1.1 and source notices](FONT-LICENSES.md).
 - **Zod:** its MIT copyright and license notice are preserved in the generated bridge files.
 

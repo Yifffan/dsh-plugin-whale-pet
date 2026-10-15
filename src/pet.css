@@ -83,3 +83,91 @@
 .restore{position:fixed;right:18px;bottom:18px;pointer-events:auto;border:0;color:var(--muted);border-radius:99px;padding:7px 11px;font-size:11px;-webkit-app-region:no-drag}.restore:hover{color:var(--ink);background:var(--control)}
 :host([data-paused=true]) *,:host([data-motion=false]) *{animation:none!important;transition:none!important}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.pet-art{will-change:auto}}
+/* ── A school of fish, and a whale that cannot help itself ────────────────────
+   One 7.6 s timeline shared by the school, the whale and the catch:
+     0 – 11.84 %    notice   a school swims past; the whale drops the laptop and stares
+    11.84 – 23.68 % tempted  it leans after the fish
+    23.68 – 68.42 % chase    it turns and swims after the school
+    68.42 – 81.58 % catch    it lunges; the straggler is gone
+    81.58 – 100 %   return   it swims back to its exact spot and picks the work up again
+   Durations and percentages mirror TEMPT_TIMELINE in src/temptation.js and are
+   asserted by tests/temptation.test.mjs. The whale is displaced with `translate`
+   only, so left/top-and therefore the saved position-never change. */
+:host{--tempt-total:7600ms;--tempt-p1:11.84%;--tempt-p2:23.68%;--tempt-p3:68.42%;--tempt-p4:81.58%}
+.pet{z-index:1}
+.ground{transition:opacity .45s ease}
+.fish-school{position:fixed;inset:0;display:none;pointer-events:none;z-index:0;--tempt-total:7600ms;
+  --fish-lane:60vh;--fish-scale:1;--fish-size-scale:1;--fish-in:106vw;--fish-out:-36vw;--fish-dir:-1;--fish-face:1;
+  --fish-near:50vw;--fish-flee:20vw;--fish-lag:50vw;--fish-tire:20vw;--catch-x:40vw;--catch-y:50vh;--school-spread:22px}
+:host([data-chase=active]) .fish-school{display:block}
+/* While the straggler is being eaten it belongs in front of the whale, not behind it. */
+:host([data-catch=active]) .fish-school{z-index:2}
+.fish-school[data-school="1"]{--fish-size-scale:1.14;--school-spread:27px}
+.fish-school[data-school="2"]{--fish-size-scale:.9;--school-spread:17px}
+.fish{position:absolute;left:0;top:calc(var(--fish-lane) + var(--fish-lane-off,0) * var(--school-spread));
+  width:calc(var(--fish-size,34px) * var(--fish-size-scale) * var(--fish-scale));height:auto;
+  scale:var(--fish-face,1) 1;opacity:0;
+  animation-name:fish-cross,fish-wiggle;animation-duration:var(--tempt-total,7600ms),.95s;
+  animation-timing-function:linear,ease-in-out;animation-iteration-count:1,infinite;animation-fill-mode:both,none}
+.fish:nth-child(1){--fish-size:34px;--fish-lead:0px;--fish-lane-off:-.85;animation-delay:0s,-.15s}
+.fish:nth-child(2){--fish-size:30px;--fish-lead:26px;--fish-lane-off:.3;animation-delay:0s,-.5s}
+.fish:nth-child(3){--fish-size:38px;--fish-lead:52px;--fish-lane-off:-.45;animation-delay:0s,-.8s}
+.fish:nth-child(4){--fish-size:28px;--fish-lead:76px;--fish-lane-off:.85;animation-delay:0s,-.3s}
+.fish:nth-child(5){--fish-size:33px;--fish-lead:100px;--fish-lane-off:-.1;animation-delay:0s,-.62s}
+.fish:nth-child(6){--fish-size:31px;--fish-lane-off:.5;animation-delay:0s,-.4s;animation-name:fish-caught,fish-wiggle}
+@keyframes fish-cross{
+  0%{translate:calc(var(--fish-in) - var(--fish-lead) * var(--fish-dir)) 0;opacity:0}
+  5%{opacity:1}
+  23.68%{translate:calc(var(--fish-near) - var(--fish-lead) * var(--fish-dir)) 1px}
+  68.42%{translate:calc(var(--fish-flee) - var(--fish-lead) * var(--fish-dir)) -2px}
+  100%{translate:calc(var(--fish-out) - var(--fish-lead) * var(--fish-dir)) 0;opacity:.95}
+}
+/* The straggler falls behind, tires, and is caught at the whale's mouth. */
+@keyframes fish-caught{
+  0%{translate:var(--fish-in) 0;opacity:0;scale:var(--fish-face,1) 1}
+  5%{opacity:1}
+  23.68%{translate:var(--fish-lag) 2px;scale:var(--fish-face,1) 1}
+  55%{translate:var(--fish-tire) -2px;scale:var(--fish-face,1) 1}
+  68.42%{translate:var(--catch-x) 0;opacity:1;scale:var(--fish-face,1) 1}
+  70%{translate:var(--catch-x) -2px;scale:calc(var(--fish-face,1) * 1.15) 1.15}
+  76%{translate:var(--catch-x) 1px;opacity:0;scale:calc(var(--fish-face,1) * .18) .18}
+  100%{translate:var(--catch-x) 0;opacity:0;scale:calc(var(--fish-face,1) * .18) .18}
+}
+@keyframes fish-wiggle{0%,100%{rotate:0deg}50%{rotate:calc(3.5deg * var(--fish-dir))}}
+.chomp{position:absolute;left:var(--catch-x);top:var(--catch-y);width:0;height:0;opacity:0;animation:chomp-pop var(--tempt-total,7600ms) linear both}
+.chomp span{position:absolute;border-radius:50%;background:#cfeeff;box-shadow:0 0 0 1px #2f93c455}
+.chomp span:nth-child(1){left:-15px;top:-9px;width:7px;height:7px}
+.chomp span:nth-child(2){left:-4px;top:-15px;width:5px;height:5px}
+.chomp span:nth-child(3){left:6px;top:-5px;width:4px;height:4px}
+@keyframes chomp-pop{
+  0%,68.42%{opacity:0;scale:.3}
+  70.5%{opacity:1;scale:.8}
+  74%{opacity:1;scale:1.15}
+  81.58%,100%{opacity:0;scale:1.35}
+}
+:host([data-chase=active]) .pet{animation-name:whale-chase-run;animation-duration:var(--tempt-total,7600ms);
+  animation-timing-function:linear;animation-iteration-count:1;animation-fill-mode:both}
+:host([data-chase=active]) .pet-art{animation-name:whale-chase-pose;animation-duration:var(--tempt-total,7600ms);
+  animation-timing-function:linear;animation-iteration-count:1;animation-fill-mode:both;height:100%;aspect-ratio:auto}
+:host([data-chase=active]) .ground{opacity:0}
+@keyframes whale-chase-run{
+  0%{translate:0 0;animation-timing-function:cubic-bezier(.35,0,.7,.3)}
+  11.84%{translate:calc(var(--chase-run) * -.03) -3px;animation-timing-function:cubic-bezier(.4,0,.6,1)}
+  23.68%{translate:calc(var(--chase-run) * .07) -9px;animation-timing-function:cubic-bezier(.45,0,.9,.45)}
+  56%{translate:calc(var(--chase-run) * .78) -13px;animation-timing-function:cubic-bezier(.4,0,.9,.5)}
+  68.42%{translate:var(--chase-run) -7px;animation-timing-function:cubic-bezier(.25,1.6,.5,1)}
+  81.58%{translate:calc(var(--chase-run) * 1.03) -2px;animation-timing-function:cubic-bezier(.5,0,.3,1)}
+  100%{translate:0 0}
+}
+@keyframes whale-chase-pose{
+  0%,7%{transform:rotate(0deg) scaleX(1)}
+  11.84%{transform:rotate(-2.5deg) scaleX(1)}
+  23.68%{transform:rotate(calc(var(--chase-tilt) * .6)) scaleX(var(--chase-face))}
+  36%{transform:rotate(calc(var(--chase-tilt) * 1.25)) scaleX(var(--chase-face))}
+  48%{transform:rotate(calc(var(--chase-tilt) * .55)) scaleX(var(--chase-face))}
+  62%{transform:rotate(calc(var(--chase-tilt) * 1.2)) scaleX(var(--chase-face))}
+  68.42%{transform:rotate(calc(var(--chase-tilt) * .5)) scaleX(var(--chase-face)) scale(1.05,1)}
+  74%{transform:rotate(calc(var(--chase-tilt) * .1)) scaleX(var(--chase-face)) scale(1.08,.93)}
+  81.58%{transform:rotate(calc(var(--chase-tilt) * .55)) scaleX(var(--chase-face))}
+  100%{transform:rotate(0deg) scaleX(1)}
+}

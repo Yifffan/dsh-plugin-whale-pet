@@ -79,12 +79,14 @@ function fixture(t, language = 'en') {
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { get clipboard() { clipboardReads++; throw Error('No clipboard access in formal UI'); } } });
   t.after(() => { if (navigatorDescriptor) Object.defineProperty(globalThis, 'navigator', navigatorDescriptor); else delete globalThis.navigator; });
   const saved = [], scopes = [];
+  // A movable clock keeps the fish gag deterministic inside the DOM fixture.
+  const clock = { value: 1000 };
   const host = new Element(); host.ownerDocument = document;
   host.attachShadow = () => (host.shadowRoot = new Element('shadow'));
-  const widget = new WhaleWidget(host, { language, assets: Object.fromEntries(['resting', 'working', 'waiting', 'celebrate', 'sleeping', 'error'].map(state => [state, `${state}.svg`])), css,
-    storage: { getItem: () => null, setItem: (_key, value) => saved.push(JSON.parse(value)) }, now: () => 1000, onScopeChange: scope => scopes.push(scope) });
+  const widget = new WhaleWidget(host, { language, assets: Object.fromEntries(['resting', 'working', 'waiting', 'celebrate', 'sleeping', 'error', 'fish'].map(state => [state, `${state}.svg`])), css,
+    storage: { getItem: () => null, setItem: (_key, value) => saved.push(JSON.parse(value)) }, now: () => clock.value, onScopeChange: scope => scopes.push(scope) });
   t.after(() => { widget.dispose(); assert.equal(clipboardReads, 0); });
-  return { widget, document, window, saved, scopes };
+  return { widget, document, window, saved, scopes, clock };
 }
 
 test('formal widget has no diagnostic/test controls, collectors, clipboard or telemetry paths', () => {
@@ -101,7 +103,7 @@ for (const language of ['en', 'zh']) {
     const { widget } = fixture(t, language);
     const buttons = widget.root.querySelectorAll('button');
     assert.deepEqual(buttons.map(button => button.getAttribute('class')), ['pet-button', 'close', 'action reset', 'action hide', 'restore']);
-    assert.deepEqual(widget.root.querySelectorAll('input').map(input => input.getAttribute('id')), ['whale-size', 'whale-motion']);
+    assert.deepEqual(widget.root.querySelectorAll('input').map(input => input.getAttribute('id')), ['whale-size', 'whale-motion', 'whale-fish']);
     assert.deepEqual(widget.root.querySelectorAll('select').map(select => select.getAttribute('id')), ['whale-scope', 'whale-sleep']);
     for (const node of widget.root.querySelectorAll('[data-i18n]')) assert.equal(node.textContent, MESSAGES[language][node.dataset.i18n]);
     for (const node of widget.root.querySelectorAll('[data-i18n-aria]')) assert.equal(node.getAttribute('aria-label'), MESSAGES[language][node.dataset.i18nAria]);
@@ -173,4 +175,117 @@ test('disposal cleans ordinary listeners once and ignores late updates', t => {
   assert.equal(cleanups, 1); assert.equal(w.root.children.length, 0);
   assert.equal(w.button.listeners.get('click').size, 0);
   const snapshot = w.machine.snapshot; w.update({ available: true, running: true }); assert.equal(w.machine.snapshot, snapshot);
+});
+
+test('the school is inert decoration: no controls, no labels, no buttons', t => {
+  const { widget: w } = fixture(t);
+  assert.equal(w.fishLayer.getAttribute('aria-hidden'), 'true');
+  assert.equal(w.fishes.length, 6);
+  for (const fish of w.fishes) {
+    assert.equal(fish.tagName, 'img');
+    assert.equal(fish.getAttribute('alt'), '');
+    assert.equal(fish.getAttribute('draggable'), 'false');
+    assert.equal(fish.src, 'fish.svg');
+  }
+  assert.equal(w.root.querySelectorAll('button').length, 5, 'the gag adds no focusable control');
+  assert.match(css, /\.fish-school\{[^}]*pointer-events:none/);
+});
+
+test('a passing school takes the whale off its post and gives the spot back untouched', t => {
+  const { widget: w, saved, clock } = fixture(t);
+  const base = { sessionId: 'fish', available: true, running: true, pending: false, workingCount: 2 };
+  w.update(base);
+  assert.equal(w.pet.dataset.state, 'working');
+  assert.equal(w.chaseActive, false);
+  assert.equal(w.pet.dataset.chasePhase, 'none');
+  const spot = { ...w.position };
+  const writes = saved.length;
+  // Force the arrival time instead of waiting for the random first delay.
+  clock.value = 60000;
+  w.temptation.nextAt = clock.value;
+  w.paint();
+  assert.equal(w.chaseActive, true);
+  assert.equal(w.host.dataset.chase, 'active');
+  assert.equal(w.pet.dataset.chasePhase, 'notice');
+  assert.equal(w.pet.dataset.state, 'working', 'the real session state is never rewritten');
+  assert.equal(w.image.src, 'resting.svg', 'the laptop is dropped');
+  assert.equal(w.countOverlay.hidden, true, 'the work counter steps aside');
+  assert.equal(w.bubbleText.textContent, translate('en', 'tempt.notice'));
+  assert.equal(w.pet.dataset.notice, 'true', 'the gag bubble stays visible without hovering');
+  assert.match(w.pet.style['--chase-run'], /^-?\d+px$/);
+  assert.equal(w.pet.style['--chase-face'], '1', 'chasing left reuses the artwork as drawn');
+  assert.match(w.fishLayer.style['--catch-x'], /^\d+px$/);
+  assert.ok(['0', '1', '2'].includes(w.fishLayer.dataset.school), 'one of the three school shapes');
+  clock.value += 1800;
+  w.paint();
+  assert.equal(w.pet.dataset.chasePhase, 'chase');
+  clock.value += 4000;
+  w.paint();
+  assert.equal(w.pet.dataset.chasePhase, 'catch');
+  assert.equal(w.bubbleText.textContent, translate('en', 'tempt.catch'));
+  assert.deepEqual({ ...w.position }, spot, 'the whale never leaves its saved coordinates');
+  clock.value += 1900;
+  w.paint();
+  assert.equal(w.chaseActive, false);
+  assert.equal(w.host.dataset.chase, undefined);
+  assert.equal(w.pet.dataset.chasePhase, 'none');
+  assert.equal(w.image.src, 'working.svg', 'work picks up exactly where it stopped');
+  assert.equal(w.countOverlay.hidden, false);
+  assert.equal(saved.length, writes, 'a chase is never persisted');
+  assert.deepEqual({ ...w.position }, spot);
+});
+
+test('a real state, a drag or the switch ends the gag immediately', t => {
+  const { widget: w, clock } = fixture(t);
+  const base = { sessionId: 'fish', available: true, running: true, pending: false, workingCount: 1 };
+  const start = () => {
+    w.update(base);
+    clock.value += 60000;
+    w.temptation.nextAt = clock.value;
+    w.paint();
+    assert.equal(w.chaseActive, true);
+  };
+  w.update(base);
+  start();
+  w.update({ ...base, pending: true });
+  assert.equal(w.chaseActive, false);
+  assert.equal(w.pet.dataset.state, 'waiting', 'a pending decision is never hidden by fish');
+  start();
+  w.button.dispatch('pointerdown', { button: 0, isPrimary: true, pointerId: 3, clientX: 10, clientY: 10 });
+  assert.equal(w.chaseActive, false, 'a hand on the whale wins');
+  start();
+  clock.value += 120000;
+  w.update(base);
+  assert.equal(w.chaseActive, false, 'one school at a time, then a quiet gap');
+});
+
+test('the fish switch is optional, remembered, and silences motion-independent fish', t => {
+  const { widget: w, saved, clock } = fixture(t);
+  assert.equal(w.preferences.fish, true);
+  assert.equal(w.fish.checked, true);
+  clock.value += 200000;
+  w.temptation.nextAt = clock.value;
+  w.paint();
+  assert.equal(w.chaseActive, true);
+  w.fish.checked = false; w.fish.dispatch('change');
+  assert.equal(w.preferences.fish, false);
+  assert.equal(w.chaseActive, false);
+  assert.equal(w.temptation.nextAt, undefined);
+  clock.value += 600000; w.paint();
+  assert.equal(w.chaseActive, false, 'no school while the switch is off');
+  w.fish.checked = true; w.fish.dispatch('change');
+  assert.equal(w.preferences.fish, true);
+  assert.ok(w.temptation.nextAt > clock.value, 'turning it back on schedules a fresh school');
+  assert.equal(saved.at(-1).fish, true);
+});
+
+test('turning gentle animations off also stops the gag', t => {
+  const { widget: w, clock } = fixture(t);
+  clock.value += 200000;
+  w.temptation.nextAt = clock.value;
+  w.paint();
+  assert.equal(w.chaseActive, true);
+  w.motion.checked = false; w.motion.dispatch('change');
+  assert.equal(w.chaseActive, false);
+  assert.equal(w.host.dataset.motion, 'false');
 });
